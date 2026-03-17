@@ -1,0 +1,500 @@
+﻿Imports System.Data.SQLite
+Imports System.IO
+Imports System.Windows.Forms.VisualStyles.VisualStyleElement
+Imports System.Drawing.Imaging ' <--- NECESARIO PARA CAMBIAR COLORES
+Public Class PagHome
+    Private Sub PagHome_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        ' 1. CONFIGURACIÓN DEL MENÚ LATERAL (TREEVIEW)
+        ' Fijamos el ancho y lo anclamos a la izquierda para que ocupe todo el alto
+        TvNavegacion.Dock = DockStyle.Left
+        TvNavegacion.Width = 330 ' Un ancho cómodo para leer
+
+        ' 2. CONFIGURACIÓN DEL LOGO
+        ' Truco: Si quieres el logo DEBAJO del menú, lo ideal sería usar un Panel contenedor.
+        ' Si no quieres cambiar el diseño ahora, un truco rápido es anclarlo abajo a la izquierda:
+        'PictureBoxLogoHome.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        PictureBoxLogoHome.Visible = False
+        ' 3. CONFIGURACIÓN DEL PANEL PRINCIPAL (Vital para ser Responsive)
+        ' Esto hace que el panel gris ocupe TODO el espacio que sobra a la derecha
+        Panel.Dock = DockStyle.Fill
+
+        ' 4. ALINEACIÓN DEL TEXTO DE LA EMPRESA
+        ' Esto corrige los espacios en blanco que tenías en el MenuStrip
+        NombreEmpresa.Alignment = ToolStripItemAlignment.Right
+        CargarDatosEmpresa()
+
+        ' ---------------------------------------------------------
+        ' 1. CONFIGURACIÓN VISUAL DEL FORMULARIO
+        ' ---------------------------------------------------------
+        Me.DoubleBuffered = True
+
+        ' ---------------------------------------------------------
+        ' 2. CONFIGURACIÓN DEL MENUSTRIP (BARRA SUPERIOR)
+        ' ---------------------------------------------------------
+        Dim miMenu = MenuStripVacio
+
+        miMenu.Renderer = New RenderizadorMenuSutil(New ColoresMenuModerno())
+        miMenu.BackColor = Color.FromArgb(40, 50, 70)
+        miMenu.ForeColor = Color.WhiteSmoke
+        miMenu.Font = New Font("Segoe UI", 11, FontStyle.Regular)
+
+        ' 1. Quitamos el relleno al contenedor principal para que los botones toquen los bordes
+        miMenu.AutoSize = False
+        miMenu.Height = 55
+        miMenu.Padding = New Padding(10, 0, 10, 0)
+
+        ' 2. Bucle para expandir el área clickeable de cada botón
+        For Each item As ToolStripItem In miMenu.Items
+            item.ForeColor = Color.WhiteSmoke
+
+            ' ¡LA MAGIA! Le damos relleno interno al botón para que crezca hacia arriba y abajo.
+            ' Esto mantiene el ancho del texto automático pero hace que la zona clickeable mida los 55px.
+            item.Padding = New Padding(12, 16, 12, 16)
+
+            ' CASO A: SI ES UN MENÚ DESPLEGABLE
+            If TypeOf item Is ToolStripMenuItem Then
+                Dim menu As ToolStripMenuItem = DirectCast(item, ToolStripMenuItem)
+                For Each subItem As ToolStripItem In menu.DropDownItems
+                    subItem.ForeColor = Color.WhiteSmoke
+                    ' Los submenús que caen hacia abajo los dejamos con un tamaño normal
+                    subItem.Padding = New Padding(20, 5, 20, 5)
+                Next
+            End If
+
+            ' CASO B: SI ES UN TEXTBOX
+            If TypeOf item Is ToolStripTextBox Then
+                item.BackColor = Color.FromArgb(40, 50, 70)
+                item.ForeColor = Color.WhiteSmoke
+            End If
+        Next
+
+        ' ---------------------------------------------------------
+        ' 3. CONFIGURACIÓN DEL TREEVIEW
+        ' ---------------------------------------------------------
+        TvNavegacion.DrawMode = TreeViewDrawMode.OwnerDrawText
+        TvNavegacion.BackColor = Color.FromArgb(40, 50, 70)
+        TvNavegacion.ForeColor = Color.WhiteSmoke
+        TvNavegacion.Font = New Font("Segoe UI", 11, FontStyle.Regular)
+        TvNavegacion.ItemHeight = 45
+        TvNavegacion.ShowLines = False
+        TvNavegacion.ShowPlusMinus = False
+        TvNavegacion.FullRowSelect = True
+        TvNavegacion.BorderStyle = BorderStyle.None
+
+        ' ---------------------------------------------------------
+        ' 4. CARGA DE DATOS
+        ' ---------------------------------------------------------
+        Dim metodoSetStyle = GetType(Control).GetMethod("SetStyle",
+    System.Reflection.BindingFlags.NonPublic Or System.Reflection.BindingFlags.Instance)
+
+        metodoSetStyle.Invoke(Panel, New Object() {ControlStyles.AllPaintingInWmPaint Or
+            ControlStyles.UserPaint Or ControlStyles.DoubleBuffer, True})
+    End Sub
+    Private Sub ConfigurarTreeViewModerno()
+        Dim tv = TvNavegacion ' Asegúrate de que tu control se llame así
+
+        ' 1. CONFIGURACIÓN VISUAL BÁSICA
+        tv.BackColor = Color.FromArgb(40, 50, 70) ' El mismo azul oscuro de tu Grid
+        tv.ForeColor = Color.WhiteSmoke         ' Texto claro
+        tv.Font = New Font("Segoe UI", 11, FontStyle.Regular)
+        tv.ItemHeight = 40                      ' Filas altas y cómodas
+        tv.ShowLines = False                    ' Sin líneas punteadas
+        tv.ShowPlusMinus = False                ' Sin botones +/- (Más limpio)
+        tv.FullRowSelect = True                 ' Selección de ancho completo
+        tv.BorderStyle = BorderStyle.None       ' Sin bordes hundidos
+
+        ' 2. ACTIVAR EL PINTADO PERSONALIZADO (OWNER DRAW)
+        ' Esto nos permite controlar cómo se ve la selección
+        tv.DrawMode = TreeViewDrawMode.OwnerDrawText
+    End Sub
+    ''' <summary>
+    ''' Abre un formulario hijo dentro del panel contenedor ajustando su tamaño automáticamente.
+    ''' </summary>
+    ''' <param name="formHijo">Instancia del formulario a abrir (ej: New FrmFacturas)</param>
+    Private Sub AbrirFormularioEnPanel(ByVal formHijo As Form)
+        ' 1. Limpieza: Si ya hay un formulario abierto, lo quitamos
+        If Me.Panel.Controls.Count > 0 Then
+            ' Opcional: Cerrar el anterior para liberar memoria
+            Dim formAnterior As Form = TryCast(Me.Panel.Controls(0), Form)
+            If formAnterior IsNot Nothing Then formAnterior.Close()
+
+            Me.Panel.Controls.Clear()
+        End If
+
+        ' 2. Configuración "Responsive":
+        ' Le decimos que no es una ventana independiente (TopLevel = False)
+        formHijo.TopLevel = False
+        ' Quitamos los bordes de ventana para que parezca parte del panel
+        formHijo.FormBorderStyle = FormBorderStyle.None
+        ' ¡ESTO ES LO MÁS IMPORTANTE! Dock = Fill hace que se estire con el panel
+        formHijo.Dock = DockStyle.Fill
+
+        ' 3. Inyección:
+        Me.Panel.Controls.Add(formHijo)
+        Me.Panel.Tag = formHijo
+        formHijo.Show()
+    End Sub
+    Private Sub TvNavegacion_NodeMouseClick(sender As Object, e As TreeNodeMouseClickEventArgs) Handles TvNavegacion.NodeMouseClick
+        ' Evitamos error si pulsan en un nodo padre que no abre nada (como "Ventas" o "Compras")
+        ' Si tus nodos padre no deben abrir nada, puedes filtrar aquí.
+
+        Select Case e.Node.Name
+        ' --- VENTAS ---
+            Case "NodoPresupuesto"
+            ' AbrirFormularioEnPanel(New FrmPresupuestos()) 
+            ' Nota: Descomenta la línea de arriba cuando tengas creado el form
+
+            Case "NodoFacturas"
+                ' Aquí llamas a tu formulario de facturas real
+                ' AbrirFormularioEnPanel(New FrmFacturas())
+                MsgBox("Abriendo Facturas...") ' Línea temporal para probar
+
+        ' --- COMPRAS ---
+            Case "NodoProveedor"
+            ' AbrirFormularioEnPanel(New FrmProveedores())
+
+        ' --- ALMACEN ---
+            Case "NodoArticulos"
+                AbrirFormularioEnPanel(New FrmArticulos())
+
+        ' --- CONFIGURACIÓN / SALIR ---
+            Case "NodoSalir" ' Si añades un botón de salir
+                Me.Close()
+
+        End Select
+    End Sub
+    Private Sub TvNavegacion_DrawNode(sender As Object, e As DrawTreeNodeEventArgs) Handles TvNavegacion.DrawNode
+        ' 1. CONFIGURACIÓN DE COLORES
+        Dim colorFondo As Color = Color.FromArgb(40, 50, 70)
+        Dim colorSeleccion As Color = Color.FromArgb(55, 65, 85) ' Hover/Selección más sutil
+        Dim colorAcento As Color = Color.FromArgb(0, 120, 215)
+        Dim colorTexto As Color
+
+        Dim isSelected As Boolean = (e.State And TreeNodeStates.Selected) <> 0
+        Dim rectCompleto As New Rectangle(0, e.Bounds.Y, TvNavegacion.Width, e.Bounds.Height)
+
+        ' 2. PINTAR FONDO DE LA FILA
+        Using pincelFondo As New SolidBrush(If(isSelected, colorSeleccion, colorFondo))
+            e.Graphics.FillRectangle(pincelFondo, rectCompleto)
+        End Using
+
+        ' 3. BARRITA LATERAL IZQUIERDA (INDICADOR DE SELECCIÓN)
+        If isSelected Then
+            Using pincelBarra As New SolidBrush(colorAcento)
+                e.Graphics.FillRectangle(pincelBarra, New Rectangle(0, e.Bounds.Y, 4, e.Bounds.Height))
+            End Using
+        End If
+        ' 4. DEFINIR ESTILO SEGÚN NIVEL (PADRE O HIJO)
+        Dim fuenteNodo As Font
+        Dim sangria As Integer = e.Node.Level * 25 ' 25px de margen por nivel
+
+        If e.Node.Level = 0 Then
+            ' Nodos Raíz (Ventas, Compras, Almacén...)
+            ' SUBIMOS A 12 puntos
+            fuenteNodo = New Font("Segoe UI", 12, FontStyle.Bold)
+            colorTexto = If(isSelected, Color.White, Color.FromArgb(150, 160, 180))
+        Else
+            ' Nodos Hijos (Artículos, Familias...)
+            ' SUBIMOS A 11.5 o 12 puntos (un pelín más fino que el padre)
+            fuenteNodo = New Font("Segoe UI", 11.5F, FontStyle.Regular)
+            colorTexto = Color.WhiteSmoke
+        End If
+
+        ' 5. DIBUJAR ICONO (CON FILTRO BLANCO)
+        Dim xPosIcono As Integer = 12 + sangria
+        Dim anchoIcono As Integer = 0
+
+        If TvNavegacion.ImageList IsNot Nothing AndAlso e.Node.ImageIndex >= 0 Then
+            Dim img As Image = TvNavegacion.ImageList.Images(e.Node.ImageIndex)
+            Dim yPosIcono As Integer = e.Bounds.Y + ((e.Bounds.Height - img.Height) \ 2)
+
+            ' Matriz para convertir icono negro en blanco puro
+            Dim matrix As New System.Drawing.Imaging.ColorMatrix(New Single()() {
+                New Single() {-1, 0, 0, 0, 0},
+                New Single() {0, -1, 0, 0, 0},
+                New Single() {0, 0, -1, 0, 0},
+                New Single() {0, 0, 0, 1, 0},
+                New Single() {1, 1, 1, 0, 1}
+            })
+            Dim attr As New System.Drawing.Imaging.ImageAttributes()
+            attr.SetColorMatrix(matrix)
+
+            e.Graphics.DrawImage(img, New Rectangle(xPosIcono, yPosIcono, img.Width, img.Height),
+                                 0, 0, img.Width, img.Height, GraphicsUnit.Pixel, attr)
+
+            anchoIcono = img.Width + 10
+        End If
+
+        ' 6. PINTAR TEXTO FINAL
+        Dim rectTexto As New Rectangle(xPosIcono + anchoIcono, e.Bounds.Y, rectCompleto.Width - (xPosIcono + anchoIcono), rectCompleto.Height)
+
+        TextRenderer.DrawText(e.Graphics, e.Node.Text, fuenteNodo, rectTexto, colorTexto,
+                              TextFormatFlags.VerticalCenter Or TextFormatFlags.Left)
+
+        ' Liberar memoria de la fuente creada al vuelo
+        fuenteNodo.Dispose()
+    End Sub
+    ' 3. EVENTO DE PINTADO (Copia y pega este evento en tu código)
+    ' Evento que salta al clicar un nodo del árbol
+    Private Sub TreeView1_AfterSelect(sender As Object, e As TreeViewEventArgs) Handles TvNavegacion.AfterSelect
+
+        ' Usamos Select Case para ver qué nodo se ha pulsado
+        ' Recomendación: Usa e.Node.Name (nombre interno) o e.Node.Text (texto visible)
+
+        Select Case e.Node.Text
+        ' --- VENTAS ---
+            Case "Presupuestos"
+                AbrirFormulario(New FrmPresupuestos())
+            Case "Pedidos"
+                AbrirFormulario(New FrmPedidos())
+            Case "Facturas"
+               'AbrirFormulario(New FrmFacturas())
+            Case "Albaranes"
+                AbrirFormulario(New FrmAlbaranes())
+
+        ' --- TERCEROS ---
+            Case "Clientes"
+                AbrirFormulario(New FrmClientes())
+            Case "Proveedores"
+                AbrirFormulario(New FrmProveedores())
+
+        ' --- ALMACEN ---
+            Case "Artículos"
+                AbrirFormulario(New frmArticulos())
+            Case "Familias"
+                Dim frm As New FrmFamilias()
+                frm.ShowDialog()
+            Case "Movimientos de almacen"
+                AbrirFormulario(New FrmMovimientos())
+
+        ' --- TABLAS ---
+            Case "Vendedores"
+                Dim frm As New FrmVendedores()
+                frm.ShowDialog()
+            Case "Formas de pago"
+                Dim frm As New FrmFormPag()
+                frm.ShowDialog()
+            Case "Rutas"
+                Dim frm As New FrmRutas()
+                frm.ShowDialog()
+            Case "Agencias"
+                Dim frm As New FrmAgencias()
+                frm.ShowDialog()
+        ' --- CONFIGURACIÓN ---
+            Case "Empresa"
+                'AbrirFormulario(New FrmEmpresa())
+
+                ' Caso por defecto: Si clicas un nodo padre (ej: "Ventas") que no haga nada
+            Case Else
+                ' No hacer nada
+        End Select
+    End Sub
+
+    ' --- MÉTODO PRO PARA GESTIONAR FORMULARIOS EN EL PANEL ---
+    Private Sub AbrirFormulario(formularioHijo As Form)
+        ' 1. Limpiar el panel por si había otro formulario abierto antes
+        If Panel.Controls.Count > 0 Then
+            Panel.Controls(0).Dispose()
+        End If
+
+        ' 2. Configurar el formulario para que no sea una ventana independiente
+        formularioHijo.TopLevel = False
+        formularioHijo.FormBorderStyle = FormBorderStyle.None ' Quitamos los bordes
+        formularioHijo.Dock = DockStyle.Fill ' Que ocupe todo el panel
+
+
+        ' 3. Añadirlo al panel y mostrarlo
+        Panel.Controls.Add(formularioHijo)
+        Panel.Tag = formularioHijo ' Guardamos referencia
+        formularioHijo.Show()
+    End Sub
+
+    Private Sub TvNavegacion_AfterSelect(sender As Object, e As TreeViewEventArgs) Handles TvNavegacion.AfterSelect
+
+    End Sub
+
+
+    Private Sub CargarDatosEmpresa()
+        Try
+            ' 1. Preparamos la consulta
+            ' Seleccionamos el campo Logo de la empresa (asumimos que es la ID 1)
+            Dim query As String = "SELECT Logo FROM Empresa WHERE ID = 1"
+            Dim conexion = ConexionBD.GetConnection()
+
+            Using cmd As New SQLiteCommand(query, conexion)
+                ' 2. Ejecutamos la consulta usando ExecuteScalar
+                ' (ExecuteScalar es ideal cuando solo quieres recuperar UN dato, como una imagen)
+                Dim resultado = cmd.ExecuteScalar()
+
+                ' 3. Verificamos que no sea nulo (por si la empresa no tiene logo aún)
+                If resultado IsNot Nothing AndAlso Not IsDBNull(resultado) Then
+
+                    ' 4. TRUCO DE MAGIA: Convertir Bytes -> Imagen
+                    ' Convertimos el resultado genérico a un array de bytes
+                    Dim bytesImagen As Byte() = DirectCast(resultado, Byte())
+
+                    ' Creamos un "stream" (flujo de memoria) con esos bytes
+                    Using ms As New MemoryStream(bytesImagen)
+                        ' La clase Image crea la foto a partir de ese flujo
+                        PictureBoxLogoHome.Image = Image.FromStream(ms)
+                    End Using
+
+                    ' Ajuste visual opcional: para que la foto no se deforme
+                    PictureBoxLogoHome.SizeMode = PictureBoxSizeMode.Zoom
+                Else
+                    ' Si no hay logo en la BD, puedes limpiar el PictureBox o poner uno por defecto
+                    PictureBoxLogoHome.Image = Nothing
+                End If
+            End Using
+
+        Catch ex As Exception
+            MessageBox.Show("Error al cargar el logo: " & ex.Message)
+        End Try
+
+        Try
+            Dim query As String = "SELECT NombreFiscal, CIF FROM Empresa WHERE ID = 1"
+            Dim conexion = ConexionBD.GetConnection()
+
+            Using cmd As New SQLiteCommand(query, conexion)
+                Dim reader = cmd.ExecuteReader
+                If reader.Read() Then
+                    NombreEmpresa.Text = reader("NombreFiscal").ToString & " : " & reader("CIF").ToString
+                End If
+            End Using
+        Catch ex As Exception
+            MessageBox.Show("No se ha podido conectar a la base de datos o la tabla se encuentra vacía " & ex.Message)
+        End Try
+    End Sub
+
+    Private Sub Panel_Paint(sender As Object, e As PaintEventArgs) Handles Panel.Paint
+
+    End Sub
+
+    Protected Overrides ReadOnly Property CreateParams As System.Windows.Forms.CreateParams
+        Get
+            ' Forzamos el uso del tipo específico de Windows Forms
+            Dim cp As System.Windows.Forms.CreateParams = MyBase.CreateParams
+            ' Aplicamos el estilo extendido para evitar parpadeos (WS_EX_COMPOSITED)
+            cp.ExStyle = cp.ExStyle Or &H2000000
+            Return cp
+        End Get
+    End Property
+End Class
+' =========================================================
+' CLASE PARA PERSONALIZAR LOS COLORES DEL MENÚ (RENDERER)
+' =========================================================
+Public Class ColoresMenuModerno
+    Inherits ProfessionalColorTable
+
+    ' 1. COLORES BASE (FONDO)
+    Private ReadOnly colorFondo As Color = Color.FromArgb(40, 50, 70)       ' Tu azul oscuro
+    Private ReadOnly colorSeleccion As Color = Color.FromArgb(60, 120, 180) ' Tu azul acento (Hover)
+    Private ReadOnly colorBorde As Color = Color.FromArgb(40, 50, 70)       ' Invisible
+
+    ' Fondo de la barra principal
+    Public Overrides ReadOnly Property MenuStripGradientBegin As Color
+        Get
+            Return colorFondo
+        End Get
+    End Property
+    Public Overrides ReadOnly Property MenuStripGradientEnd As Color
+        Get
+            Return colorFondo
+        End Get
+    End Property
+
+    ' Cuando pasas el ratón por encima (Hover)
+    Public Overrides ReadOnly Property MenuItemSelected As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+
+    ' Cuando haces clic (Pressed)
+    Public Overrides ReadOnly Property MenuItemPressedGradientBegin As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+    Public Overrides ReadOnly Property MenuItemPressedGradientEnd As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+
+    ' Borde de los botones (lo ponemos igual al fondo para que no se vea)
+    Public Overrides ReadOnly Property MenuItemBorder As Color
+        Get
+            Return colorBorde
+        End Get
+    End Property
+
+    ' Fondo del desplegable (Dropdown)
+    Public Overrides ReadOnly Property ToolStripDropDownBackground As Color
+        Get
+            Return colorFondo
+        End Get
+    End Property
+
+    ' Columna de iconos en el desplegable (Image Margin)
+    Public Overrides ReadOnly Property ImageMarginGradientBegin As Color
+        Get
+            Return colorFondo
+        End Get
+    End Property
+    Public Overrides ReadOnly Property ImageMarginGradientMiddle As Color
+        Get
+            Return colorFondo
+        End Get
+    End Property
+    Public Overrides ReadOnly Property ImageMarginGradientEnd As Color
+        Get
+            Return colorFondo
+        End Get
+    End Property
+End Class
+' =========================================================
+' RENDERIZADOR PERSONALIZADO PARA CONTROLAR EL HOVER
+' =========================================================
+' =========================================================
+' RENDERIZADOR PERSONALIZADO PARA UN HOVER SUTIL
+' =========================================================
+Public Class RenderizadorMenuSutil
+    Inherits ToolStripProfessionalRenderer
+
+    ' Definimos el color sutil aquí (Un poco más claro que el fondo 40, 50, 70)
+    ' 50, 60, 80 es un gris azulado muy elegante y discreto.
+    Private ReadOnly colorHoverSutil As Color = Color.FromArgb(50, 60, 80)
+
+    Public Sub New(tablaColores As ProfessionalColorTable)
+        MyBase.New(tablaColores)
+    End Sub
+
+    Protected Overrides Sub OnRenderMenuItemBackground(e As ToolStripItemRenderEventArgs)
+
+        ' 1. ¿Es un item de la barra superior?
+        If e.Item.IsOnDropDown = False Then
+
+            ' 2. Si está seleccionado (ratón encima) pero NO abierto
+            If e.Item.Selected AndAlso Not e.Item.Pressed Then
+
+                ' AQUÍ ESTÁ EL CAMBIO: Pintamos un rectángulo del color sutil
+                Dim rect As New Rectangle(0, 0, e.Item.Width, e.Item.Height)
+
+                Using pincelSutil As New SolidBrush(colorHoverSutil)
+                    e.Graphics.FillRectangle(pincelSutil, rect)
+                End Using
+
+            Else
+                ' Si está pulsado o es un desplegable, dejamos el comportamiento normal (Azul fuerte)
+                MyBase.OnRenderMenuItemBackground(e)
+            End If
+
+        Else
+            ' Items del menú desplegable (Ventas, Compras...) -> Comportamiento normal
+            MyBase.OnRenderMenuItemBackground(e)
+        End If
+    End Sub
+
+
+End Class
