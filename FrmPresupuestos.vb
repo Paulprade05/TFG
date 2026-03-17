@@ -3,29 +3,54 @@
 Public Class FrmPresupuestos
 
 #Region "1. Variables Globales y Propiedades"
-    ' Mantenemos el estado del formulario aquí
     Private _numeroPresupuestoActual As String = ""
     Private _dtLineas As DataTable
     Private _idsParaBorrar As New List(Of Integer)
+
+    ' --- NUEVOS DESPLEGABLES ---
+    Private WithEvents cboFormaPago As New ComboBox()
+    Private WithEvents cboRuta As New ComboBox()
+    Private lblFormaPago As New Label() With {.Text = "Forma de Pago", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
+    Private lblRuta As New Label() With {.Text = "Ruta Asignada", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
 #End Region
 
 #Region "2. Eventos de Inicialización (Load)"
     Private Sub FrmPresupuestos_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        ' Orden lógico de carga:
-        ' 1. Configurar aspecto visual (Estilos y Responsive)
         ConfigurarDiseñoResponsive()
         EstilizarGrid(DataGridView1)
+
+        ' Añadimos los combos al formulario ANTES de cargar datos
+        Me.Controls.Add(lblFormaPago) : Me.Controls.Add(cboFormaPago)
+        Me.Controls.Add(lblRuta) : Me.Controls.Add(cboRuta)
+        cboFormaPago.DropDownStyle = ComboBoxStyle.DropDownList
+        cboRuta.DropDownStyle = ComboBoxStyle.DropDownList
+        CargarDesplegables()
+
         ReorganizarControlesAutomaticamente()
-        ' 2. Configurar estructura de datos (Columnas)
         ConfigurarColumnasGrid()
 
-        ' 3. Cargar datos iniciales
         Dim ultimoNum As String = ObtenerUltimoNumeroPresupuesto()
         If Not String.IsNullOrEmpty(ultimoNum) Then
             CargarPresupuesto(ultimoNum)
         Else
-            LimpiarFormulario() ' Prepara uno nuevo si no hay nada
+            LimpiarFormulario()
         End If
+    End Sub
+
+    Private Sub CargarDesplegables()
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+            ' Formas de pago
+            Dim daPago As New SQLiteDataAdapter("SELECT ID_FormaPago, Descripcion FROM FormasPago WHERE Activo=1", c)
+            Dim dtPago As New DataTable() : daPago.Fill(dtPago)
+            cboFormaPago.DataSource = dtPago : cboFormaPago.DisplayMember = "Descripcion" : cboFormaPago.ValueMember = "ID_FormaPago" : cboFormaPago.SelectedIndex = -1
+            ' Rutas
+            Dim daRuta As New SQLiteDataAdapter("SELECT ID_Ruta, NombreZona FROM Rutas WHERE Activo=1", c)
+            Dim dtRuta As New DataTable() : daRuta.Fill(dtRuta)
+            cboRuta.DataSource = dtRuta : cboRuta.DisplayMember = "NombreZona" : cboRuta.ValueMember = "ID_Ruta" : cboRuta.SelectedIndex = -1
+        Catch ex As Exception
+        End Try
     End Sub
 #End Region
 
@@ -39,10 +64,10 @@ Public Class FrmPresupuestos
 
         ' 2. CABECERA: Todo anclado a la izquierda (Top, Left) para que NO se choquen.
         ' Quitamos el AnchorRight para evitar que los campos se superpongan.
-        TextBoxCliente.Anchor = AnchorStyles.Top Or AnchorStyles.Left
-        TextBoxObservaciones.Anchor = AnchorStyles.Top Or AnchorStyles.Left
-        TextBoxEstado.Anchor = AnchorStyles.Top Or AnchorStyles.Left
-        Label6.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        'TextBoxCliente.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        'TextBoxObservaciones.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        'TextBoxEstado.Anchor = AnchorStyles.Top Or AnchorStyles.Left
+        'Label6.Anchor = AnchorStyles.Top Or AnchorStyles.Left
 
         ' 3. TOTALES: Se quedan pegados abajo a la derecha
         Dim controlesTotales As Control() = {LabelBase, TextBoxBase, LabelIva, TextBoxIva, Label7, TextBoxTotalPresup, LabelStock}
@@ -202,7 +227,8 @@ Public Class FrmPresupuestos
         _dtLineas = New DataTable()
         ConfigurarEstructuraDataTable()
         DataGridView1.DataSource = _dtLineas
-
+        If cboFormaPago IsNot Nothing Then cboFormaPago.SelectedIndex = -1
+        If cboRuta IsNot Nothing Then cboRuta.SelectedIndex = -1
         TextBoxIdCliente.Focus()
     End Sub
 
@@ -272,6 +298,12 @@ Public Class FrmPresupuestos
                         TextBoxCliente.Text = r("NombreCliente").ToString()
                         TextBoxIdVendedor.Text = r("ID_Vendedor").ToString()
                         TextBoxVendedor.Text = r("NombreVendedor").ToString()
+                        ' --- CARGAR COMBOS ---
+                        Dim idPago = r("ID_FormaPago")
+                        If Not IsDBNull(idPago) Then cboFormaPago.SelectedValue = Convert.ToInt32(idPago) Else cboFormaPago.SelectedIndex = -1
+
+                        Dim idRut = r("ID_Ruta")
+                        If Not IsDBNull(idRut) Then cboRuta.SelectedValue = Convert.ToInt32(idRut) Else cboRuta.SelectedIndex = -1
                     Else
                         MessageBox.Show("Presupuesto no encontrado.") : Return
                     End If
@@ -310,19 +342,31 @@ Public Class FrmPresupuestos
             If c.State <> ConnectionState.Open Then c.Open()
             trans = c.BeginTransaction()
 
-            ' 1. Guardar Cabecera
-            Dim sql As String = If(esNuevo,
-                "INSERT INTO Presupuestos (NumeroPresupuesto, CodigoCliente, ID_Vendedor, Fecha, Observaciones, Estado) VALUES (@num, @cli, @vend, @fecha, @obs, @est)",
-                "UPDATE Presupuestos SET CodigoCliente=@cli, ID_Vendedor=@vend, Fecha=@fecha, Observaciones=@obs, Estado=@est WHERE NumeroPresupuesto = @num")
+            ' 1. Guardar Cabecera (Blindada y con Combos)
+            Dim idFormaPago As Object = If(cboFormaPago.SelectedValue IsNot Nothing AndAlso cboFormaPago.SelectedIndex <> -1, cboFormaPago.SelectedValue, DBNull.Value)
+            Dim idRuta As Object = If(cboRuta.SelectedValue IsNot Nothing AndAlso cboRuta.SelectedIndex <> -1, cboRuta.SelectedValue, DBNull.Value)
+            Dim idVend As Object = If(IsNumeric(TextBoxIdVendedor.Text) AndAlso Val(TextBoxIdVendedor.Text) > 0, Convert.ToInt32(TextBoxIdVendedor.Text), DBNull.Value)
+
+            Dim sql As String = ""
+            If esNuevo Then
+                sql = "INSERT INTO Presupuestos (NumeroPresupuesto, CodigoCliente, ID_Vendedor, Fecha, Observaciones, Estado, ID_FormaPago, ID_Ruta) VALUES (@num, @cli, @vend, @fecha, @obs, @est, @formaPago, @ruta)"
+            Else
+                sql = "UPDATE Presupuestos SET CodigoCliente=@cli, ID_Vendedor=@vend, Fecha=@fecha, Observaciones=@obs, Estado=@est, ID_FormaPago=@formaPago, ID_Ruta=@ruta WHERE NumeroPresupuesto = @num"
+            End If
 
             Using cmd As New SQLiteCommand(sql, c)
                 cmd.Transaction = trans
                 cmd.Parameters.AddWithValue("@num", _numeroPresupuestoActual)
-                cmd.Parameters.AddWithValue("@cli", TextBoxIdCliente.Text)
-                cmd.Parameters.AddWithValue("@vend", TextBoxIdVendedor.Text)
-                cmd.Parameters.AddWithValue("@fecha", If(IsDate(TextBoxFecha.Text), CDate(TextBoxFecha.Text), DateTime.Now))
-                cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text)
-                cmd.Parameters.AddWithValue("@est", TextBoxEstado.Text)
+                cmd.Parameters.AddWithValue("@cli", TextBoxIdCliente.Text.Trim())
+                cmd.Parameters.AddWithValue("@vend", idVend)
+
+                Dim fecha As DateTime
+                If DateTime.TryParse(TextBoxFecha.Text, fecha) Then cmd.Parameters.AddWithValue("@fecha", fecha.ToString("yyyy-MM-dd HH:mm:ss")) Else cmd.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+
+                cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text.Trim())
+                cmd.Parameters.AddWithValue("@est", TextBoxEstado.Text.Trim())
+                cmd.Parameters.AddWithValue("@formaPago", idFormaPago)
+                cmd.Parameters.AddWithValue("@ruta", idRuta)
                 cmd.ExecuteNonQuery()
             End Using
 
@@ -537,8 +581,17 @@ Public Class FrmPresupuestos
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
-            Dim r = New SQLiteCommand("SELECT NombreFiscal FROM Clientes WHERE CodigoCliente='" & TextBoxIdCliente.Text & "'", c).ExecuteScalar()
-            TextBoxCliente.Text = If(r IsNot Nothing, r.ToString(), "NO EXISTE")
+            Dim cmd As New SQLiteCommand("SELECT NombreFiscal, ID_Ruta FROM Clientes WHERE CodigoCliente=@id", c)
+            cmd.Parameters.AddWithValue("@id", TextBoxIdCliente.Text)
+            Using r = cmd.ExecuteReader()
+                If r.Read() Then
+                    TextBoxCliente.Text = r("NombreFiscal").ToString()
+                    Dim idRut = r("ID_Ruta")
+                    If Not IsDBNull(idRut) Then cboRuta.SelectedValue = Convert.ToInt32(idRut)
+                Else
+                    TextBoxCliente.Text = "NO EXISTE"
+                End If
+            End Using
         Catch
         End Try
     End Sub
@@ -574,20 +627,25 @@ Public Class FrmPresupuestos
         Dim anchoForm As Integer = Me.ClientSize.Width
         Dim altoForm As Integer = Me.ClientSize.Height
 
+        ' ¡EL TRUCO! Coordenadas fijas
+        Dim col1_X As Integer = margenIzq
+        Dim col2_X As Integer = 190
+        Dim col3_X As Integer = 750
+        Dim col4_X As Integer = 920
+
         Dim yFila1 As Integer = 30
         Dim yFila2 As Integer = 55
         Dim yFila3 As Integer = 95
         Dim yFila4 As Integer = 120
+        Dim yFila5 As Integer = 160 ' Nueva fila etiquetas
+        Dim yFila6 As Integer = 185 ' Nueva fila controles
 
-        ' ¡EL TRUCO! Coordenadas fijas hacia la izquierda (Ignoramos el ancho de la pantalla)
-        Dim col1_X As Integer = margenIzq
-        Dim col2_X As Integer = 190
-        Dim col3_X As Integer = 750 ' Comienza justo al terminar la caja de observaciones
-        Dim col4_X As Integer = 920 ' Siguiente columna pegada a la anterior
-
+        ' =========================================================
+        ' 3. COLOCACIÓN DE CABECERA (Etiquetas y Cajas)
+        ' =========================================================
         ' --- ETIQUETAS DINÁMICAS ---
         For Each ctrl As Control In Me.Controls
-            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LineaTotales" Then ' Ignorar la línea de totales
+            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" Then
                 ctrl.BringToFront()
                 Dim texto As String = ctrl.Text.Trim().ToLower()
                 Select Case texto
@@ -601,68 +659,72 @@ Public Class FrmPresupuestos
             End If
         Next
 
-        ' --- CAJAS DE TEXTO (Tamaños y posiciones fijos) ---
-        ' --- CAJAS DE TEXTO (Tamaños y posiciones fijos) ---
-        ' Fila 1
-        ' Encogemos un poco la caja de presupuesto y le ponemos la lupa al lado
+        ' --- CAJAS DE TEXTO ---
+        ' Fila 1 (Presupuesto, Cliente, Fecha)
         TextBoxPresupuesto.Bounds = New Rectangle(col1_X, yFila2, 105, 25)
         btnBuscarPresupuesto.Bounds = New Rectangle(col1_X + 110, yFila2, 30, 25)
 
         TextBoxIdCliente.Bounds = New Rectangle(col2_X, yFila2, 60, 25)
-        TextBoxCliente.Bounds = New Rectangle(col2_X + 100, yFila2, 430, 25)
+        TextBoxCliente.Bounds = New Rectangle(col2_X + 70, yFila2, 460, 25)
         TextBoxFecha.Bounds = New Rectangle(col3_X, yFila2, 140, 25)
 
-        ' Fila 2
+        ' Fila 2 (Vendedor, Observaciones, Estado)
         TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 50, 25)
         TextBoxVendedor.Bounds = New Rectangle(col1_X + 55, yFila4, 85, 25)
         TextBoxObservaciones.Bounds = New Rectangle(col2_X, yFila4, 530, 25)
         TextBoxEstado.Bounds = New Rectangle(col3_X, yFila4, 140, 25)
 
         ' =========================================================
-        ' 1. SEPARADOR VISUAL CABECERA / DETALLE (Mejorado)
+        ' 4. COLOCACIÓN DE NUEVOS COMBOS (Logística)
+        ' =========================================================
+        ' 1. FORMA DE PAGO (Columna 1)
+        lblFormaPago.Location = New Point(col1_X, yFila5)
+        cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 140, 25)
+        cboFormaPago.Font = New Font("Segoe UI", 10.5F)
+
+        ' 2. RUTA (Columna 2 - Mismo ancho que las Observaciones)
+        lblRuta.Location = New Point(col2_X, yFila5)
+        cboRuta.Bounds = New Rectangle(col2_X, yFila6, 530, 25)
+        cboRuta.Font = New Font("Segoe UI", 10.5F)
+
+        ' =========================================================
+        ' 5. SEPARADOR VISUAL CABECERA / DETALLE
         ' =========================================================
         Dim lineaDivisoria As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaDivisoria")
         If lineaDivisoria Is Nothing Then
-            ' Le damos grosor (.Height = 2) y un gris más luminoso para que destaque
             lineaDivisoria = New Label() With {.Name = "LineaDivisoria", .BackColor = Color.FromArgb(120, 130, 140), .Height = 2}
             Me.Controls.Add(lineaDivisoria)
         End If
 
-        ' Bajamos la posición inicial de la tabla para darle mucho más "aire" a las cajas de arriba
-        Dim yTabla As Integer = 190
-
-        ' Colocamos la línea separadora en ese nuevo hueco generado (20 píxeles por encima de la tabla)
+        ' Bajamos la tabla a 240 para que quepan los combos holgados
+        Dim yTabla As Integer = 240
         lineaDivisoria.Bounds = New Rectangle(margenIzq, yTabla - 20, anchoForm - (margenIzq * 2), 2)
         lineaDivisoria.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         lineaDivisoria.BringToFront()
 
         ' =========================================================
-        ' 2. LA TABLA (Desplazada hacia abajo)
+        ' 6. LA TABLA (Desplazada hacia abajo)
         ' =========================================================
         Dim altoTabla As Integer = altoForm - yTabla - 140
         DataGridView1.Bounds = New Rectangle(margenIzq, yTabla, anchoForm - (margenIzq * 2), altoTabla)
-
-        ' El truco mágico para integrar la tabla en el tema oscuro
         DataGridView1.BackgroundColor = Me.BackColor
         DataGridView1.BorderStyle = BorderStyle.None
 
         ' =========================================================
-        ' 3. TOTALES (Con "Caja" de resumen)
+        ' 7. TOTALES (Con "Caja" de resumen)
         ' =========================================================
         Dim xDerecha As Integer = DataGridView1.Right
         Dim yTotales As Integer = DataGridView1.Bottom + 10
 
-        ' Creamos un panel de fondo oscuro sutil para enmarcar los totales
         Dim panelTotales As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "PanelTotalesResumen")
         If panelTotales Is Nothing Then
-            panelTotales = New Label() With {.Name = "PanelTotalesResumen", .BackColor = Color.FromArgb(25, 30, 40)} ' Azul muy oscuro
+            panelTotales = New Label() With {.Name = "PanelTotalesResumen", .BackColor = Color.FromArgb(25, 30, 40)}
             Me.Controls.Add(panelTotales)
             panelTotales.SendToBack()
         End If
         panelTotales.Bounds = New Rectangle(xDerecha - 320, yTotales, 320, 115)
         panelTotales.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
 
-        ' Ajustamos posiciones dentro de la caja
         TextBoxBase.Bounds = New Rectangle(xDerecha - 140, yTotales + 10, 120, 25)
         TextBoxIva.Bounds = New Rectangle(xDerecha - 140, yTotales + 40, 120, 25)
         LabelBase.Bounds = New Rectangle(xDerecha - 300, yTotales + 10, 150, 25)
@@ -672,11 +734,9 @@ Public Class FrmPresupuestos
         LabelBase.TextAlign = ContentAlignment.MiddleRight : LabelIva.TextAlign = ContentAlignment.MiddleRight
         TextBoxBase.TextAlign = HorizontalAlignment.Right : TextBoxIva.TextAlign = HorizontalAlignment.Right
 
-        ' Quitar bordes a las cajas de texto de los totales para que parezca texto puro
         TextBoxBase.BackColor = Color.FromArgb(25, 30, 40) : TextBoxBase.ForeColor = Color.White : TextBoxBase.BorderStyle = BorderStyle.None
         TextBoxIva.BackColor = Color.FromArgb(25, 30, 40) : TextBoxIva.ForeColor = Color.White : TextBoxIva.BorderStyle = BorderStyle.None
 
-        ' Línea del Total
         Dim lineaTotal As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaTotales")
         If lineaTotal Is Nothing Then
             lineaTotal = New Label() With {.Name = "LineaTotales", .BackColor = Color.FromArgb(100, 100, 100), .Height = 1}
@@ -686,37 +746,35 @@ Public Class FrmPresupuestos
         lineaTotal.BringToFront()
 
         Dim colorAcento As Color = Color.FromArgb(0, 150, 255)
-        Label7.Bounds = New Rectangle(xDerecha - 300, yTotales + 80, 150, 30)
-        Label7.BackColor = Color.FromArgb(25, 30, 40) : Label7.TextAlign = ContentAlignment.MiddleRight
-        Label7.Font = New Font("Segoe UI", 13, FontStyle.Bold) : Label7.ForeColor = colorAcento
+        If Label7 IsNot Nothing Then
+            Label7.Bounds = New Rectangle(xDerecha - 300, yTotales + 80, 150, 30)
+            Label7.BackColor = Color.FromArgb(25, 30, 40) : Label7.TextAlign = ContentAlignment.MiddleRight
+            Label7.Font = New Font("Segoe UI", 13, FontStyle.Bold) : Label7.ForeColor = colorAcento
+        End If
 
-        TextBoxTotalPresup.Bounds = New Rectangle(xDerecha - 140, yTotales + 80, 120, 30)
-        TextBoxTotalPresup.TextAlign = HorizontalAlignment.Right
-        TextBoxTotalPresup.Font = New Font("Segoe UI", 14, FontStyle.Bold) : TextBoxTotalPresup.ForeColor = colorAcento
-        TextBoxTotalPresup.BackColor = Color.FromArgb(25, 30, 40) : TextBoxTotalPresup.BorderStyle = BorderStyle.None
+        If TextBoxTotalPresup IsNot Nothing Then
+            TextBoxTotalPresup.Bounds = New Rectangle(xDerecha - 140, yTotales + 80, 120, 30)
+            TextBoxTotalPresup.TextAlign = HorizontalAlignment.Right
+            TextBoxTotalPresup.Font = New Font("Segoe UI", 14, FontStyle.Bold) : TextBoxTotalPresup.ForeColor = colorAcento
+            TextBoxTotalPresup.BackColor = Color.FromArgb(25, 30, 40) : TextBoxTotalPresup.BorderStyle = BorderStyle.None
+        End If
 
         ' =========================================================
-        ' 4. BARRA DE HERRAMIENTAS INFERIOR (Organizada)
+        ' 8. BARRA DE HERRAMIENTAS INFERIOR (Organizada)
         ' =========================================================
-        Dim yBotones As Integer = DataGridView1.Bottom + 45 ' Alineados con el bloque de totales
+        Dim yBotones As Integer = DataGridView1.Bottom + 45
 
-        ' Grupo 1: Acciones del Documento (Izquierda)
         EstilizarBoton(ButtonGuardar, margenIzq, yBotones, Color.FromArgb(0, 120, 215), Color.White)
         EstilizarBoton(ButtonBorrar, margenIzq + 110, yBotones, Color.FromArgb(209, 52, 56), Color.White)
         EstilizarBoton(ButtonNuevoPresup, margenIzq + 220, yBotones, Color.FromArgb(0, 120, 215), Color.White)
 
-        ' Grupo 2: Acciones de la Tabla (Centro-Izquierda)
-        ' Hacemos estos botones más anchos, cambiamos el texto y les damos color útil
         EstilizarBoton(ButtonBorrarLineas, margenIzq + 380, yBotones, Color.FromArgb(85, 85, 85), Color.White)
-        ButtonBorrarLineas.Text = "- Quitar Línea"
-        ButtonBorrarLineas.Width = 110
+        ButtonBorrarLineas.Text = "- Quitar Línea" : ButtonBorrarLineas.Width = 110
 
-        EstilizarBoton(ButtonNuevaLinea, margenIzq + 500, yBotones, Color.FromArgb(40, 140, 90), Color.White) ' Un verde elegante
-        ButtonNuevaLinea.Text = "+ Añadir Línea"
-        ButtonNuevaLinea.Width = 110
+        EstilizarBoton(ButtonNuevaLinea, margenIzq + 500, yBotones, Color.FromArgb(40, 140, 90), Color.White)
+        ButtonNuevaLinea.Text = "+ Añadir Línea" : ButtonNuevaLinea.Width = 110
 
-        ' Grupo 3: Navegación (Cerca de los totales)
-        EstilizarBoton(ButtonAnterior, xDerecha - 560, yBotones, Me.BackColor, Color.White) ' Si tu función lo soporta, pon estilo Flat
+        EstilizarBoton(ButtonAnterior, xDerecha - 560, yBotones, Me.BackColor, Color.White)
         EstilizarBoton(ButtonSiguiente, xDerecha - 450, yBotones, Me.BackColor, Color.White)
 
         LabelStock.Location = New Point(margenIzq, DataGridView1.Bottom + 10)
@@ -726,13 +784,12 @@ Public Class FrmPresupuestos
         Dim botonesAbajo As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPresup, ButtonBorrarLineas, ButtonNuevaLinea, ButtonAnterior, ButtonSiguiente, LabelStock}
         For Each b In botonesAbajo : b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left : Next
 
-        ' Reajustamos anclajes de totales
         TextBoxBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         TextBoxIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        TextBoxTotalPresup.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If TextBoxTotalPresup IsNot Nothing Then TextBoxTotalPresup.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         LabelBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         LabelIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If Label7 IsNot Nothing Then Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         lineaTotal.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
     End Sub
 
@@ -820,7 +877,12 @@ Public Class FrmPresupuestos
                         TextBoxCliente.Text = LeerTexto(r, "NombreCli") ' Esta no fallará porque la generamos en el JOIN
 
                         TextBoxIdVendedor.Text = LeerTexto(r, "ID_Vendedor")
+                        ' --- CARGAR COMBOS ---
+                        Dim idPago = r("ID_FormaPago")
+                        If Not IsDBNull(idPago) Then cboFormaPago.SelectedValue = Convert.ToInt32(idPago) Else cboFormaPago.SelectedIndex = -1
 
+                        Dim idRut = r("ID_Ruta")
+                        If Not IsDBNull(idRut) Then cboRuta.SelectedValue = Convert.ToInt32(idRut) Else cboRuta.SelectedIndex = -1
                         ' Fecha
                         Dim fechaBD As String = LeerTexto(r, "Fecha")
                         If Not String.IsNullOrEmpty(fechaBD) Then

@@ -493,9 +493,6 @@ Public Class FrmPedidos
         })
     End Sub
 
-    ' =========================================================
-    ' 2. CARGA (Por String)
-    ' =========================================================
     Private Sub CargarPedido(numeroPedido As String)
         Try
             Dim conexion = ConexionBD.GetConnection()
@@ -533,16 +530,36 @@ Public Class FrmPedidos
                         TextBoxIdVendedor.Text = If(IsDBNull(reader("ID_Vendedor")), "", reader("ID_Vendedor").ToString())
                         TextBoxVendedor.Text = If(IsDBNull(reader("NombreVendedor")), "", reader("NombreVendedor").ToString())
 
-                        ' 5. Totales (Si los tienes en pantalla)
+                        ' =========================================================
+                        ' 5. CARGAR COMBOS (FORMA DE PAGO Y RUTA)
+                        ' =========================================================
+                        Dim idPago = reader("ID_FormaPago")
+                        If Not IsDBNull(idPago) Then
+                            cboFormaPago.SelectedValue = Convert.ToInt32(idPago)
+                        Else
+                            cboFormaPago.SelectedIndex = -1 ' Lo deja en blanco si no tiene
+                        End If
+
+                        Dim idRut = reader("ID_Ruta")
+                        If Not IsDBNull(idRut) Then
+                            cboRuta.SelectedValue = Convert.ToInt32(idRut)
+                        Else
+                            cboRuta.SelectedIndex = -1 ' Lo deja en blanco si no tiene
+                        End If
+                        ' =========================================================
+
+                        ' 6. Totales (Si los tienes en pantalla)
                         If IsNumeric(reader("BaseImponible")) Then TextBoxBase.Text = Convert.ToDecimal(reader("BaseImponible")).ToString("C2")
                         If IsNumeric(reader("Total")) Then TextBoxTotalPed.Text = Convert.ToDecimal(reader("Total")).ToString("C2")
 
-                        ' 6. Trazabilidad (Presupuesto Origen)
-                        ' Verifica que el campo en BD sea ID_Presupuesto
+                        ' 7. Trazabilidad (Presupuesto Origen)
                         If Not IsDBNull(reader("NumeroPresupuesto")) Then
                             TextBoxIdPresupuesto.Text = reader("NumeroPresupuesto").ToString()
                         End If
-                        DateTimePickerFecha.Value = reader("FechaEntrega")
+
+                        If Not IsDBNull(reader("FechaEntrega")) Then
+                            DateTimePickerFecha.Value = Convert.ToDateTime(reader("FechaEntrega"))
+                        End If
                     Else
                         MessageBox.Show("Pedido no encontrado.")
                         Return
@@ -982,29 +999,25 @@ Public Class FrmPedidos
         Dim anchoForm As Integer = Me.ClientSize.Width
         Dim altoForm As Integer = Me.ClientSize.Height
 
-        Dim yFila1 As Integer = 30
-        Dim yFila2 As Integer = 55
-        Dim yFila3 As Integer = 95
-        Dim yFila4 As Integer = 120
-        Dim yFila5 As Integer = 160 ' Nueva fila para etiquetas
-        Dim yFila6 As Integer = 185 ' Nueva fila para controles
-
-        lblFormaPago.Location = New Point(col1_X, yFila5)
-        cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 200, 25)
-        cboFormaPago.Font = New Font("Segoe UI", 10.5F)
-
-        lblRuta.Location = New Point(col2_X + 25, yFila5)
-        cboRuta.Bounds = New Rectangle(col2_X + 25, yFila6, 300, 25)
-        cboRuta.Font = New Font("Segoe UI", 10.5F)
         ' ¡EL TRUCO! Coordenadas fijas
         Dim col1_X As Integer = margenIzq
         Dim col2_X As Integer = 190
         Dim col3_X As Integer = 750
         Dim col4_X As Integer = 920
 
+        Dim yFila1 As Integer = 30
+        Dim yFila2 As Integer = 55
+        Dim yFila3 As Integer = 95
+        Dim yFila4 As Integer = 120
+        Dim yFila5 As Integer = 160 ' Nueva fila etiquetas
+        Dim yFila6 As Integer = 185 ' Nueva fila controles
+
+        ' =========================================================
+        ' 3. COLOCACIÓN DE CABECERA (Etiquetas y Cajas)
+        ' =========================================================
         ' --- ETIQUETAS DINÁMICAS ---
         For Each ctrl As Control In Me.Controls
-            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LineaTotales" Then
+            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" Then
                 ctrl.BringToFront()
                 Dim texto As String = ctrl.Text.Trim().ToLower()
                 Select Case texto
@@ -1022,15 +1035,14 @@ Public Class FrmPedidos
 
         ' --- CAJAS DE TEXTO (Tamaños y posiciones fijos) ---
         ' Fila 1
-        ' Encogemos la caja de pedido a 105px para que la lupa (en la posición 110) respire
         TextBoxPedido.Bounds = New Rectangle(col1_X, yFila2, 105, 25)
         btnBuscarPedido.Bounds = New Rectangle(col1_X + 110, yFila2, 30, 25)
 
         TextBoxIdCliente.Bounds = New Rectangle(col2_X, yFila2, 60, 25)
-        TextBoxCliente.Bounds = New Rectangle(col2_X + 100, yFila2, 430, 25)
+        TextBoxCliente.Bounds = New Rectangle(col2_X + 100, yFila2, 430, 25) ' Suma 530 de ancho total
 
         TextBoxFecha.Bounds = New Rectangle(col3_X, yFila2, 140, 25)
-        DateTimePickerFecha.Bounds = New Rectangle(col4_X, yFila2, 140, 25)
+        If DateTimePickerFecha IsNot Nothing Then DateTimePickerFecha.Bounds = New Rectangle(col4_X, yFila2, 140, 25)
 
         ' Fila 2
         TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 50, 25)
@@ -1039,11 +1051,24 @@ Public Class FrmPedidos
         TextBoxObservaciones.Bounds = New Rectangle(col2_X, yFila4, 530, 25)
         TextBoxEstado.Bounds = New Rectangle(col3_X, yFila4, 140, 25)
 
-        TextBoxIdPresupuesto.Bounds = New Rectangle(col4_X, yFila4, 105, 25)
-        btnBuscarPresupuesto.Bounds = New Rectangle(col4_X + 110, yFila4, 30, 25)
+        If TextBoxIdPresupuesto IsNot Nothing Then TextBoxIdPresupuesto.Bounds = New Rectangle(col4_X, yFila4, 105, 25)
+        If btnBuscarPresupuesto IsNot Nothing Then btnBuscarPresupuesto.Bounds = New Rectangle(col4_X + 110, yFila4, 30, 25)
 
         ' =========================================================
-        ' 1. SEPARADOR VISUAL CABECERA / DETALLE (Mejorado)
+        ' 4. COLOCACIÓN DE NUEVOS COMBOS (Logística)
+        ' =========================================================
+        ' 1. FORMA DE PAGO (Columna 1)
+        lblFormaPago.Location = New Point(col1_X, yFila5)
+        cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 140, 25)
+        cboFormaPago.Font = New Font("Segoe UI", 10.5F)
+
+        ' 2. RUTA (Columna 2 - Mismo ancho que las Observaciones)
+        lblRuta.Location = New Point(col2_X, yFila5)
+        cboRuta.Bounds = New Rectangle(col2_X, yFila6, 530, 25) ' <--- ESTIRADO A 530
+        cboRuta.Font = New Font("Segoe UI", 10.5F)
+
+        ' =========================================================
+        ' 5. SEPARADOR VISUAL CABECERA / DETALLE
         ' =========================================================
         Dim lineaDivisoria As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaDivisoria")
         If lineaDivisoria Is Nothing Then
@@ -1051,13 +1076,14 @@ Public Class FrmPedidos
             Me.Controls.Add(lineaDivisoria)
         End If
 
-        Dim yTabla As Integer = 230
+        ' Bajamos la tabla a 240
+        Dim yTabla As Integer = 240
         lineaDivisoria.Bounds = New Rectangle(margenIzq, yTabla - 20, anchoForm - (margenIzq * 2), 2)
         lineaDivisoria.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         lineaDivisoria.BringToFront()
 
         ' =========================================================
-        ' 2. LA TABLA (Desplazada hacia abajo)
+        ' 6. LA TABLA
         ' =========================================================
         Dim altoTabla As Integer = altoForm - yTabla - 140
         DataGridView1.Bounds = New Rectangle(margenIzq, yTabla, anchoForm - (margenIzq * 2), altoTabla)
@@ -1065,7 +1091,7 @@ Public Class FrmPedidos
         DataGridView1.BorderStyle = BorderStyle.None
 
         ' =========================================================
-        ' 3. TOTALES (Con "Caja" de resumen)
+        ' 7. TOTALES (Con "Caja" de resumen y Blindaje)
         ' =========================================================
         Dim xDerecha As Integer = DataGridView1.Right
         Dim yTotales As Integer = DataGridView1.Bottom + 10
@@ -1100,18 +1126,21 @@ Public Class FrmPedidos
         lineaTotal.BringToFront()
 
         Dim colorAcento As Color = Color.FromArgb(0, 150, 255)
-        Label7.Bounds = New Rectangle(xDerecha - 300, yTotales + 80, 150, 30)
-        Label7.BackColor = Color.FromArgb(25, 30, 40) : Label7.TextAlign = ContentAlignment.MiddleRight
-        Label7.Font = New Font("Segoe UI", 13, FontStyle.Bold) : Label7.ForeColor = colorAcento
+        If Label7 IsNot Nothing Then
+            Label7.Bounds = New Rectangle(xDerecha - 300, yTotales + 80, 150, 30)
+            Label7.BackColor = Color.FromArgb(25, 30, 40) : Label7.TextAlign = ContentAlignment.MiddleRight
+            Label7.Font = New Font("Segoe UI", 13, FontStyle.Bold) : Label7.ForeColor = colorAcento
+        End If
 
-        ' Usamos TextBoxTotalPed para la pantalla de pedidos
-        TextBoxTotalPed.Bounds = New Rectangle(xDerecha - 140, yTotales + 80, 120, 30)
-        TextBoxTotalPed.TextAlign = HorizontalAlignment.Right
-        TextBoxTotalPed.Font = New Font("Segoe UI", 14, FontStyle.Bold) : TextBoxTotalPed.ForeColor = colorAcento
-        TextBoxTotalPed.BackColor = Color.FromArgb(25, 30, 40) : TextBoxTotalPed.BorderStyle = BorderStyle.None
+        If TextBoxTotalPed IsNot Nothing Then
+            TextBoxTotalPed.Bounds = New Rectangle(xDerecha - 140, yTotales + 80, 120, 30)
+            TextBoxTotalPed.TextAlign = HorizontalAlignment.Right
+            TextBoxTotalPed.Font = New Font("Segoe UI", 14, FontStyle.Bold) : TextBoxTotalPed.ForeColor = colorAcento
+            TextBoxTotalPed.BackColor = Color.FromArgb(25, 30, 40) : TextBoxTotalPed.BorderStyle = BorderStyle.None
+        End If
 
         ' =========================================================
-        ' 4. BARRA DE HERRAMIENTAS INFERIOR (Organizada)
+        ' 8. BARRA DE HERRAMIENTAS INFERIOR (Organizada)
         ' =========================================================
         Dim yBotones As Integer = DataGridView1.Bottom + 45
 
@@ -1120,36 +1149,32 @@ Public Class FrmPedidos
         EstilizarBoton(ButtonNuevoPresup, margenIzq + 220, yBotones, Color.FromArgb(0, 120, 215), Color.White)
 
         EstilizarBoton(ButtonBorrarLineas, margenIzq + 380, yBotones, Color.FromArgb(85, 85, 85), Color.White)
-        ButtonBorrarLineas.Text = "- Quitar Línea"
-        ButtonBorrarLineas.Width = 110
+        ButtonBorrarLineas.Text = "- Quitar Línea" : ButtonBorrarLineas.Width = 110
 
         EstilizarBoton(ButtonNuevaLinea, margenIzq + 500, yBotones, Color.FromArgb(40, 140, 90), Color.White)
-        ButtonNuevaLinea.Text = "+ Añadir Línea"
-        ButtonNuevaLinea.Width = 110
+        ButtonNuevaLinea.Text = "+ Añadir Línea" : ButtonNuevaLinea.Width = 110
 
         EstilizarBoton(ButtonAnterior, xDerecha - 560, yBotones, Me.BackColor, Color.White)
         EstilizarBoton(ButtonSiguiente, xDerecha - 450, yBotones, Me.BackColor, Color.White)
 
-        LabelStock.Location = New Point(margenIzq, DataGridView1.Bottom + 10)
+        If LabelStock IsNot Nothing Then LabelStock.Location = New Point(margenIzq, DataGridView1.Bottom + 10)
 
-        ' --- ANCHORS INTELIGENTES (Corregidos) ---
+        ' --- ANCHORS INTELIGENTES ---
         DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
-
-        ' 1. Botones de la Izquierda (Se quedan clavados a la izquierda)
         Dim botonesAbajo As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPresup, ButtonBorrarLineas, ButtonNuevaLinea, LabelStock}
-        For Each b In botonesAbajo : b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left : Next
+        For Each b In botonesAbajo
+            If b IsNot Nothing Then b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        Next
 
-        ' 2. Botones de Navegación (Se anclan a la DERECHA para que no los pise la caja de totales)
-        ButtonAnterior.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        ButtonSiguiente.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If ButtonAnterior IsNot Nothing Then ButtonAnterior.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If ButtonSiguiente IsNot Nothing Then ButtonSiguiente.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
 
-        ' 3. Tarjeta de Totales (A la derecha)
         TextBoxBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         TextBoxIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        TextBoxTotalPed.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If TextBoxTotalPed IsNot Nothing Then TextBoxTotalPed.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         LabelBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         LabelIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If Label7 IsNot Nothing Then Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         lineaTotal.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
     End Sub
 
@@ -1339,9 +1364,7 @@ Public Class FrmPedidos
 
         End If
     End Sub
-    ' =========================================================
-    ' LÓGICA DE STOCK EN TIEMPO REAL
-    ' =========================================================
+
     ' =========================================================
     ' LÓGICA DE STOCK EN TIEMPO REAL (CON PREVISIÓN)
     ' =========================================================
@@ -1422,4 +1445,5 @@ Public Class FrmPedidos
 
         Return 0
     End Function
+
 End Class
