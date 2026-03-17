@@ -43,8 +43,56 @@ Public Class PagHome
         miMenu.Height = 55
         miMenu.Padding = New Padding(10, 0, 10, 0)
 
+        ' =========================================================
+        ' AÑADIR DESPLEGABLE DE INFORMES DINÁMICAMENTE
+        ' =========================================================
+        Dim btnInformes As ToolStripMenuItem = Nothing
+        For Each itm As ToolStripItem In miMenu.Items
+            If TypeOf itm Is ToolStripMenuItem AndAlso itm.Text.Trim().ToLower() = "informes" Then
+                btnInformes = DirectCast(itm, ToolStripMenuItem)
+                Exit For
+            End If
+        Next
+
+        If btnInformes IsNot Nothing Then
+            btnInformes.DropDownItems.Clear()
+
+            ' Quitamos la franja gris fea de la izquierda
+            Dim menuDesplegable = DirectCast(btnInformes.DropDown, ToolStripDropDownMenu)
+            menuDesplegable.ShowImageMargin = False
+            menuDesplegable.ShowCheckMargin = False
+            menuDesplegable.BackColor = Color.FromArgb(40, 50, 70)
+
+            ' --- VENTAS Y FACTURACIÓN ---
+            btnInformes.DropDownItems.Add("Listado de Facturas Emitidas (IVA)", Nothing, AddressOf InformeFacturasEmitidas_Click)
+            btnInformes.DropDownItems.Add("Ranking de Ventas por Cliente", Nothing, AddressOf InformeVentasCliente_Click)
+            btnInformes.DropDownItems.Add("Comisiones por Vendedor", Nothing, AddressOf InformeVentasVendedor_Click)
+
+            btnInformes.DropDownItems.Add("-") ' Separador
+
+            ' --- TESORERÍA Y OPERACIONES ---
+            btnInformes.DropDownItems.Add("Facturas Pendientes de Cobro", Nothing, AddressOf InformePendientesCobro_Click)
+            btnInformes.DropDownItems.Add("Pedidos Pendientes de Servir", Nothing, AddressOf InformePedidosPendientes_Click)
+            btnInformes.DropDownItems.Add("Hoja de Rutas y Envíos Diarios", Nothing, AddressOf InformeRutas_Click)
+
+            btnInformes.DropDownItems.Add("-") ' Separador
+
+            ' --- ALMACÉN E INVENTARIO ---
+            btnInformes.DropDownItems.Add("Inventario Valorado", Nothing, AddressOf InformeInventarioValorado_Click)
+            btnInformes.DropDownItems.Add("Alerta de Stock Mínimo", Nothing, AddressOf InformeStockMinimo_Click)
+            btnInformes.DropDownItems.Add("Top Artículos Más Vendidos", Nothing, AddressOf InformeArticulosMasVendidos_Click)
+
+            ' Estilizamos cada sub-botón para que "respire"
+            For Each subItem As ToolStripItem In btnInformes.DropDownItems
+                subItem.ForeColor = Color.WhiteSmoke
+                subItem.Font = New Font("Segoe UI", 10.5F, FontStyle.Regular)
+                subItem.Padding = New Padding(10, 8, 10, 8)
+            Next
+        End If
+
         ' 2. Bucle para expandir el área clickeable de cada botón
         For Each item As ToolStripItem In miMenu.Items
+            ' ... (tu código sigue normal aquí) ...
             item.ForeColor = Color.WhiteSmoke
 
             ' ¡LA MAGIA! Le damos relleno interno al botón para que crezca hacia arriba y abajo.
@@ -147,7 +195,7 @@ Public Class PagHome
             Case "NodoFacturas"
                 ' Aquí llamas a tu formulario de facturas real
                 ' AbrirFormularioEnPanel(New FrmFacturas())
-                MsgBox("Abriendo Facturas...") ' Línea temporal para probar
+                ' Línea temporal para probar
 
         ' --- COMPRAS ---
             Case "NodoProveedor"
@@ -155,7 +203,7 @@ Public Class PagHome
 
         ' --- ALMACEN ---
             Case "NodoArticulos"
-                AbrirFormularioEnPanel(New FrmArticulos())
+                AbrirFormularioEnPanel(New frmArticulos())
 
         ' --- CONFIGURACIÓN / SALIR ---
             Case "NodoSalir" ' Si añades un botón de salir
@@ -248,7 +296,7 @@ Public Class PagHome
             Case "Pedidos"
                 AbrirFormulario(New FrmPedidos())
             Case "Facturas"
-               'AbrirFormulario(New FrmFacturas())
+                AbrirFormulario(New FrmFacturas())
             Case "Albaranes"
                 AbrirFormulario(New FrmAlbaranes())
 
@@ -379,6 +427,59 @@ Public Class PagHome
             Return cp
         End Get
     End Property
+
+
+    ' =========================================================
+    ' EVENTOS CLIC DE LOS INFORMES
+    ' =========================================================
+
+    ' 1. VENTAS
+    Private Sub InformeFacturasEmitidas_Click(sender As Object, e As EventArgs)
+        ' Vital para el contable. Filtra entre dos fechas y saca Base Imponible, IVA y Total. Se exporta a Excel para pagar impuestos.
+        AbrirFormularioEnPanel(New FrmInformeFacturas())
+    End Sub
+
+    Private Sub InformeVentasCliente_Click(sender As Object, e As EventArgs)
+        ' Para saber qué clientes compran más y aplicarles rappels o descuentos a final de año.
+        MsgBox("Abriendo Ranking de Clientes...", MsgBoxStyle.Information, "Informes")
+    End Sub
+
+    Private Sub InformeVentasVendedor_Click(sender As Object, e As EventArgs)
+        ' Suma las ventas de cada comercial para calcular sus comisiones a final de mes.
+        MsgBox("Abriendo Comisiones por Vendedor...", MsgBoxStyle.Information, "Informes")
+    End Sub
+
+    ' 2. OPERACIONES
+    Private Sub InformePendientesCobro_Click(sender As Object, e As EventArgs)
+        ' Las facturas cuyo "Estado" no sea 'Pagado'. Básico para llamar a los clientes morosos.
+        MsgBox("Abriendo Facturas Pendientes de Cobro...", MsgBoxStyle.Information, "Informes")
+    End Sub
+
+    Private Sub InformePedidosPendientes_Click(sender As Object, e As EventArgs)
+        ' Para el mozo de almacén. Qué pedidos nos han hecho y aún no se han convertido en Albarán/Enviado.
+        MsgBox("Abriendo Pedidos Pendientes de Servir...", MsgBoxStyle.Information, "Informes")
+    End Sub
+
+    Private Sub InformeRutas_Click(sender As Object, e As EventArgs)
+        ' Se imprime por las mañanas para darle al repartidor la lista de direcciones y bultos agrupados por "Ruta".
+        MsgBox("Abriendo Hoja de Rutas...", MsgBoxStyle.Information, "Informes")
+    End Sub
+
+    ' 3. ALMACÉN
+    Private Sub InformeInventarioValorado_Click(sender As Object, e As EventArgs)
+        ' Multiplica el Stock Actual x Precio de Coste de cada artículo. Obligatorio presentarlo a Hacienda a final de año.
+        MsgBox("Abriendo Inventario Valorado...", MsgBoxStyle.Information, "Informes")
+    End Sub
+
+    Private Sub InformeStockMinimo_Click(sender As Object, e As EventArgs)
+        ' Muestra solo los artículos cuyo Stock Actual sea menor o igual a 2 (o lo que tú definas). Sirve para saber qué hay que comprar hoy.
+        MsgBox("Abriendo Alerta de Stock Mínimo...", MsgBoxStyle.Information, "Informes")
+    End Sub
+
+    Private Sub InformeArticulosMasVendidos_Click(sender As Object, e As EventArgs)
+        ' Estadística pura. Agrupa las líneas de factura por artículo para saber cuáles son los productos estrella.
+        MsgBox("Abriendo Top Artículos...", MsgBoxStyle.Information, "Informes")
+    End Sub
 End Class
 ' =========================================================
 ' CLASE PARA PERSONALIZAR LOS COLORES DEL MENÚ (RENDERER)
@@ -386,84 +487,113 @@ End Class
 Public Class ColoresMenuModerno
     Inherits ProfessionalColorTable
 
-    ' 1. COLORES BASE (FONDO)
-    Private ReadOnly colorFondo As Color = Color.FromArgb(40, 50, 70)       ' Tu azul oscuro
-    Private ReadOnly colorSeleccion As Color = Color.FromArgb(60, 120, 180) ' Tu azul acento (Hover)
-    Private ReadOnly colorBorde As Color = Color.FromArgb(40, 50, 70)       ' Invisible
+    ' 1. COLORES BASE 
+    Private ReadOnly colorFondo As Color = Color.FromArgb(40, 50, 70)       ' Fondo general
+    Private ReadOnly colorSeleccion As Color = Color.FromArgb(55, 65, 85)   ' Hover sutil (Igual que tu TreeView)
+    Private ReadOnly colorBorde As Color = Color.FromArgb(20, 30, 50)       ' Borde exterior oscuro
+    Private ReadOnly colorSeparador As Color = Color.FromArgb(70, 80, 100)  ' Línea separadora
 
-    ' Fondo de la barra principal
+    ' --- FONDOS ---
     Public Overrides ReadOnly Property MenuStripGradientBegin As Color
         Get
             Return colorFondo
         End Get
     End Property
+
     Public Overrides ReadOnly Property MenuStripGradientEnd As Color
         Get
             Return colorFondo
         End Get
     End Property
 
-    ' Cuando pasas el ratón por encima (Hover)
-    Public Overrides ReadOnly Property MenuItemSelected As Color
-        Get
-            Return colorSeleccion
-        End Get
-    End Property
-
-    ' Cuando haces clic (Pressed)
-    Public Overrides ReadOnly Property MenuItemPressedGradientBegin As Color
-        Get
-            Return colorSeleccion
-        End Get
-    End Property
-    Public Overrides ReadOnly Property MenuItemPressedGradientEnd As Color
-        Get
-            Return colorSeleccion
-        End Get
-    End Property
-
-    ' Borde de los botones (lo ponemos igual al fondo para que no se vea)
-    Public Overrides ReadOnly Property MenuItemBorder As Color
-        Get
-            Return colorBorde
-        End Get
-    End Property
-
-    ' Fondo del desplegable (Dropdown)
     Public Overrides ReadOnly Property ToolStripDropDownBackground As Color
         Get
             Return colorFondo
         End Get
     End Property
 
-    ' Columna de iconos en el desplegable (Image Margin)
+    ' --- HOVER Y SELECCIÓN ---
+    Public Overrides ReadOnly Property MenuItemSelected As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemSelectedGradientBegin As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemSelectedGradientEnd As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemPressedGradientBegin As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuItemPressedGradientEnd As Color
+        Get
+            Return colorSeleccion
+        End Get
+    End Property
+
+    ' --- BORDES Y MÁRGENES ---
+    Public Overrides ReadOnly Property MenuItemBorder As Color
+        Get
+            Return Color.Transparent ' Quita el borde azul de Windows al pasar el ratón
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property MenuBorder As Color
+        Get
+            Return colorBorde ' Borde general de la cajita desplegable
+        End Get
+    End Property
+
     Public Overrides ReadOnly Property ImageMarginGradientBegin As Color
         Get
             Return colorFondo
         End Get
     End Property
+
     Public Overrides ReadOnly Property ImageMarginGradientMiddle As Color
         Get
             Return colorFondo
         End Get
     End Property
+
     Public Overrides ReadOnly Property ImageMarginGradientEnd As Color
         Get
             Return colorFondo
         End Get
     End Property
+
+    ' --- SEPARADOR PLANO ---
+    Public Overrides ReadOnly Property SeparatorDark As Color
+        Get
+            Return colorSeparador
+        End Get
+    End Property
+
+    Public Overrides ReadOnly Property SeparatorLight As Color
+        Get
+            Return colorFondo ' Evita el efecto 3D antiguo
+        End Get
+    End Property
 End Class
+
 ' =========================================================
-' RENDERIZADOR PERSONALIZADO PARA CONTROLAR EL HOVER
-' =========================================================
-' =========================================================
-' RENDERIZADOR PERSONALIZADO PARA UN HOVER SUTIL
+' RENDERIZADOR PERSONALIZADO PARA UN HOVER SUTIL Y TEXTO CLARO
 ' =========================================================
 Public Class RenderizadorMenuSutil
     Inherits ToolStripProfessionalRenderer
 
-    ' Definimos el color sutil aquí (Un poco más claro que el fondo 40, 50, 70)
-    ' 50, 60, 80 es un gris azulado muy elegante y discreto.
     Private ReadOnly colorHoverSutil As Color = Color.FromArgb(50, 60, 80)
 
     Public Sub New(tablaColores As ProfessionalColorTable)
@@ -471,30 +601,21 @@ Public Class RenderizadorMenuSutil
     End Sub
 
     Protected Overrides Sub OnRenderMenuItemBackground(e As ToolStripItemRenderEventArgs)
-
-        ' 1. ¿Es un item de la barra superior?
-        If e.Item.IsOnDropDown = False Then
-
-            ' 2. Si está seleccionado (ratón encima) pero NO abierto
-            If e.Item.Selected AndAlso Not e.Item.Pressed Then
-
-                ' AQUÍ ESTÁ EL CAMBIO: Pintamos un rectángulo del color sutil
-                Dim rect As New Rectangle(0, 0, e.Item.Width, e.Item.Height)
-
-                Using pincelSutil As New SolidBrush(colorHoverSutil)
-                    e.Graphics.FillRectangle(pincelSutil, rect)
-                End Using
-
-            Else
-                ' Si está pulsado o es un desplegable, dejamos el comportamiento normal (Azul fuerte)
-                MyBase.OnRenderMenuItemBackground(e)
-            End If
-
+        ' Si es la barra principal y está seleccionada pero no abierta
+        If e.Item.IsOnDropDown = False AndAlso e.Item.Selected AndAlso Not e.Item.Pressed Then
+            Dim rect As New Rectangle(0, 0, e.Item.Width, e.Item.Height)
+            Using pincelSutil As New SolidBrush(colorHoverSutil)
+                e.Graphics.FillRectangle(pincelSutil, rect)
+            End Using
         Else
-            ' Items del menú desplegable (Ventas, Compras...) -> Comportamiento normal
+            ' Para el desplegable usamos los colores de ColoresMenuModerno
             MyBase.OnRenderMenuItemBackground(e)
         End If
     End Sub
 
-
+    ' ¡ESTO ES VITAL! Fuerza a que el texto siempre sea blanco humo, incluso al pasar el ratón
+    Protected Overrides Sub OnRenderItemText(e As ToolStripItemTextRenderEventArgs)
+        e.TextColor = Color.WhiteSmoke
+        MyBase.OnRenderItemText(e)
+    End Sub
 End Class
