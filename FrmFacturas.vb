@@ -85,8 +85,7 @@ Public Class FrmFacturas
         ' --- 1. Identificación ---
         DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "NumeroOrden", .DataPropertyName = "NumeroOrden", .HeaderText = "Nº", .Width = 40, .ReadOnly = True, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleCenter}})
         DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "ID_Articulo", .DataPropertyName = "ID_Articulo", .HeaderText = "ID Art", .Width = 60})
-        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Descripcion", .DataPropertyName = "Descripcion", .HeaderText = "Descripción", .Width = 250})
-
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Descripcion", .DataPropertyName = "Descripcion", .HeaderText = "Descripción", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill})
         ' --- 2. Cantidad y Precio ---
         DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Cantidad", .DataPropertyName = "Cantidad", .HeaderText = "Cantidad", .Width = 75, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "N2", .BackColor = Color.Ivory}})
         DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "PrecioUnitario", .DataPropertyName = "PrecioUnitario", .HeaderText = "Precio Base", .Width = 85, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "C2"}})
@@ -849,7 +848,7 @@ Public Class FrmFacturas
     End Sub
     Private Sub btnImportarAlbaran_Click_1(sender As Object, e As EventArgs) Handles btnImportarAlbaran.Click
         Using frm As New FrmBuscador
-            frm.TablaABuscar = "Pedidos"
+            frm.TablaABuscar = "Albaranes"
             If frm.ShowDialog = DialogResult.OK Then
                 Dim codAlba = frm.Resultado ' Ahora recibimos String
                 If Not String.IsNullOrEmpty(codAlba) Then ImportarDatosAlbaran(codAlba)
@@ -857,10 +856,12 @@ Public Class FrmFacturas
         End Using
 
     End Sub
-    Private Sub ImportarDatosAlbaran(CodigoAlbaran)
+    Private Sub ImportarDatosAlbaran(CodigoAlbaran As String)
         Dim c = ConexionBD.GetConnection()
         Try
             If c.State <> ConnectionState.Open Then c.Open()
+
+            ' 1. Cargar la cabecera del Albarán
             Dim sqlCab As String = "SELECT A.*, C.NombreFiscal, V.Nombre AS NombreVend FROM Albaranes A " &
                                    "LEFT JOIN Clientes C ON A.CodigoCliente=C.CodigoCliente " &
                                    "LEFT JOIN Vendedores V ON A.ID_Vendedor=V.ID_Vendedor " &
@@ -874,55 +875,78 @@ Public Class FrmFacturas
                         TextBoxCliente.Text = r("NombreFiscal").ToString()
                         TextBoxIdVendedor.Text = If(IsDBNull(r("ID_Vendedor")), "", r("ID_Vendedor").ToString())
                         TextBoxVendedor.Text = If(IsDBNull(r("NombreVend")), "", r("NombreVend").ToString())
-                        DateTimePickerFecha.Value = r("FechaEntrega")
-                        TextBoxObservaciones.Text = $"Desde Presupuesto {CodigoAlbaran}. "
+
+                        If Not IsDBNull(r("FechaEntrega")) Then DateTimePickerFecha.Value = Convert.ToDateTime(r("FechaEntrega"))
+
+                        TextBoxObservaciones.Text = $"Generado desde Albarán {CodigoAlbaran}."
                         If TextBoxAlbaranOrigen IsNot Nothing Then
                             TextBoxAlbaranOrigen.Text = CodigoAlbaran
                             TextBoxAlbaranOrigen.Tag = CodigoAlbaran
                         End If
+                    Else
+                        MessageBox.Show("Albarán no encontrado en la base de datos.")
+                        Return
                     End If
                 End Using
             End Using
-            Dim sqlLin As String = "SELECT * FROM LineasAlbaran Where Numeroalbaran = @num order by NumeroOrden ASC"
+
+            ' 2. Descargar las líneas del Albarán
+            Dim sqlLin As String = "SELECT * FROM LineasAlbaran WHERE NumeroAlbaran = @num ORDER BY NumeroOrden ASC"
             Dim dtOrigen As New DataTable()
             Using cmd As New SQLiteCommand(sqlLin, c)
                 cmd.Parameters.AddWithValue("@num", CodigoAlbaran)
                 Dim da As New SQLiteDataAdapter(cmd)
                 da.Fill(dtOrigen)
             End Using
+
+            ' Limpiamos la tabla de la pantalla
             _dtLineas.Rows.Clear()
+
+            ' 3. Bucle traductor (De Albarán a Factura)
             For Each rowOrig As DataRow In dtOrigen.Rows
                 Dim rowNew As DataRow = _dtLineas.NewRow()
 
-                ' --- CORRECCIÓN DEL ERROR ---
-                ' Ya no existe ID_Pedido, ahora usamos NumeroPedido
-                rowNew("NumeroFactura") = _numeroFacturaActual ' Asignamos el código actual (ej: PED-26-001)
-                ' ----------------------------
-
+                rowNew("NumeroFactura") = _numeroFacturaActual
                 rowNew("ID_Linea") = DBNull.Value
                 rowNew("NumeroOrden") = rowOrig("NumeroOrden")
                 rowNew("ID_Articulo") = rowOrig("ID_Articulo")
                 rowNew("Descripcion") = rowOrig("Descripcion")
 
-                Dim ca As Decimal = 0 : Decimal.TryParse(rowOrig("Cantidad").ToString(), ca)
+                ' Leer unidades (CantidadServida o Cantidad)
+                Dim ca As Decimal = 0
+                If dtOrigen.Columns.Contains("CantidadServida") Then
+                    Decimal.TryParse(rowOrig("CantidadServida").ToString(), ca)
+                ElseIf dtOrigen.Columns.Contains("Cantidad") Then
+                    Decimal.TryParse(rowOrig("Cantidad").ToString(), ca)
+                End If
+
                 Dim pr As Decimal = 0 : Decimal.TryParse(rowOrig("PrecioUnitario").ToString(), pr)
                 Dim dt As Decimal = 0 : Decimal.TryParse(rowOrig("Descuento").ToString(), dt)
 
-                rowNew("Cantidad") = ca : rowNew("PrecioUnitario") = pr : rowNew("Descuento") = dt
-                rowNew("Total") = (ca * pr) * (1 - (dt / 100))
+                Dim iva As Decimal = 21
+                If dtOrigen.Columns.Contains("PorcentajeIVA") AndAlso Not IsDBNull(rowOrig("PorcentajeIVA")) Then
+                    Decimal.TryParse(rowOrig("PorcentajeIVA").ToString(), iva)
+                End If
+
+                ' Guardamos en las columnas de la Factura
+                rowNew("Cantidad") = ca
+                rowNew("PrecioUnitario") = pr
+                rowNew("Descuento") = dt
+                rowNew("PorcentajeIVA") = iva
+
+                ' Columnas visuales
+                rowNew("PrecioConIVA") = pr * (1 + (iva / 100))
+                Dim totalSinIva As Decimal = (ca * pr) * (1 - (dt / 100))
+                rowNew("Total") = totalSinIva
+                rowNew("TotalConIVA") = totalSinIva * (1 + (iva / 100))
 
                 _dtLineas.Rows.Add(rowNew)
             Next
+
+            ' Calculamos los totales finales de la pantalla
             CalcularTotalesGenerales()
-            MessageBox.Show("Pedido importado.")
+            MessageBox.Show("Albarán importado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
 
-            For Each rowOrig As DataRow In dtOrigen.Rows
-                Dim rowNew As DataRow = _dtLineas.NewRow()
-                rowNew("NumeroAlbaran") = rowOrig("NumeroOrden")
-                rowNew("ID_Linea") = DBNull.Value
-
-
-            Next
         Catch ex As Exception
             MessageBox.Show("Error al importar: " & ex.Message)
         End Try
