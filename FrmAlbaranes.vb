@@ -963,7 +963,7 @@ Public Class FrmAlbaranes
                 End Select
             End If
         Next
-
+       
         ' Alinear Cajas Fila 1
         If TextBoxAlbaran IsNot Nothing Then TextBoxAlbaran.Bounds = New Rectangle(col1_X, yFila2, 100, 25)
         If Button1 IsNot Nothing Then Button1.Bounds = New Rectangle(col1_X + 105, yFila2, 30, 25)
