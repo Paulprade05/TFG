@@ -758,9 +758,59 @@ Public Class FrmFacturas
         LimpiarFormulario()
     End Sub
     Private Sub ButtonBorrar_Click(sender As Object, e As EventArgs) Handles ButtonBorrar.Click
-        '-----------------------------------------------------------------------------------------------
-        'HACER MAS TARDE
-        '-----------------------------------------------------------------------------------------------
+        ' 1. Seguridad: Si no hay factura cargada (es nueva), no hacemos nada
+        If String.IsNullOrEmpty(_numeroFacturaActual) Then
+            MessageBox.Show("No puedes borrar una factura que aún no se ha guardado.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Return
+        End If
+
+        ' 2. Confirmación del usuario (es una acción destructiva, mejor preguntar)
+        If MessageBox.Show($"¿Estás seguro de ELIMINAR la factura {_numeroFacturaActual} y todas sus líneas de forma permanente?", "Confirmar Borrado", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) = DialogResult.No Then
+            Return
+        End If
+
+        Dim conexion = ConexionBD.GetConnection()
+        Dim transaccion As SQLiteTransaction = Nothing
+
+        Try
+            If conexion.State <> ConnectionState.Open Then conexion.Open()
+
+            ' Abrimos la transacción por si algo falla a medias
+            transaccion = conexion.BeginTransaction()
+
+            ' ====================================================================
+            ' PASO A: Borrar las LÍNEAS (Tabla Hija)
+            ' ====================================================================
+            Dim sqlLineas As String = "DELETE FROM LineasFacturaVenta WHERE NumeroFactura = @num"
+            Using cmd As New SQLiteCommand(sqlLineas, conexion)
+                cmd.Transaction = transaccion
+                cmd.Parameters.AddWithValue("@num", _numeroFacturaActual)
+                cmd.ExecuteNonQuery()
+            End Using
+
+            ' ====================================================================
+            ' PASO B: Borrar la CABECERA (Tabla Padre)
+            ' ====================================================================
+            Dim sqlCabecera As String = "DELETE FROM FacturasVenta WHERE NumeroFactura = @num"
+            Using cmd As New SQLiteCommand(sqlCabecera, conexion)
+                cmd.Transaction = transaccion
+                cmd.Parameters.AddWithValue("@num", _numeroFacturaActual)
+                cmd.ExecuteNonQuery()
+            End Using
+
+            ' Confirmamos que todo ha ido bien
+            transaccion.Commit()
+
+            MessageBox.Show("Factura eliminada correctamente.", "Eliminado", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
+            ' 3. Reseteamos el formulario para dejarlo listo para una nueva factura
+            LimpiarFormulario()
+
+        Catch ex As Exception
+            ' Si la base de datos se queja, deshacemos el borrado para no romper nada
+            If transaccion IsNot Nothing Then transaccion.Rollback()
+            MessageBox.Show("Error crítico al borrar: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
     Private Sub ButtonNuevaLinea_Click(sender As Object, e As EventArgs) Handles ButtonNuevaLinea.Click
         ' 1. Seguridad: Si la tabla de memoria no existe, la inicializamos

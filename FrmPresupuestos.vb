@@ -144,6 +144,7 @@ Public Class FrmPresupuestos
         TextBoxIdCliente.Focus()
     End Sub
 
+
     Private Sub ConfigurarEstructuraDataTable()
         With _dtLineas.Columns
             If Not .Contains("ID_Linea") Then .Add("ID_Linea", GetType(Object))
@@ -551,7 +552,7 @@ Public Class FrmPresupuestos
             Dim totalSinIva As Decimal = (cant * prec) * (1 - (dto / 100))
             Dim totalConIva As Decimal = totalSinIva * (1 + (iva / 100))
 
-            fila.Cells("PrecioConIVA").Value = precioConIva
+
             fila.Cells("Total").Value = totalSinIva
             fila.Cells("TotalConIVA").Value = totalConIva
 
