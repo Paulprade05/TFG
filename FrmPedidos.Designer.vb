@@ -45,7 +45,6 @@ Partial Class FrmPedidos
         TextBoxVendedor = New TextBox()
         TextBoxIdVendedor = New TextBox()
         Label4 = New Label()
-        TextBoxEstado = New TextBox()
         TextBoxObservaciones = New TextBox()
         Label6 = New Label()
         Label5 = New Label()
@@ -289,13 +288,6 @@ Partial Class FrmPedidos
         Label4.TabIndex = 53
         Label4.Text = "Vendedor"
         ' 
-        ' TextBoxEstado
-        ' 
-        TextBoxEstado.Location = New Point(711, 118)
-        TextBoxEstado.Name = "TextBoxEstado"
-        TextBoxEstado.Size = New Size(148, 25)
-        TextBoxEstado.TabIndex = 52
-        ' 
         ' TextBoxObservaciones
         ' 
         TextBoxObservaciones.Location = New Point(422, 118)
@@ -458,7 +450,6 @@ Partial Class FrmPedidos
         Controls.Add(TextBoxVendedor)
         Controls.Add(TextBoxIdVendedor)
         Controls.Add(Label4)
-        Controls.Add(TextBoxEstado)
         Controls.Add(TextBoxObservaciones)
         Controls.Add(Label6)
         Controls.Add(Label5)
@@ -506,7 +497,6 @@ Partial Class FrmPedidos
     Friend WithEvents TextBoxVendedor As TextBox
     Friend WithEvents TextBoxIdVendedor As TextBox
     Friend WithEvents Label4 As Label
-    Friend WithEvents TextBoxEstado As TextBox
     Friend WithEvents TextBoxObservaciones As TextBox
     Friend WithEvents Label6 As Label
     Friend WithEvents Label5 As Label

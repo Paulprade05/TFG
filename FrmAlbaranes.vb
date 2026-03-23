@@ -12,7 +12,7 @@ Public Class FrmAlbaranes
     Private WithEvents cboRuta As New ComboBox()
     Private lblFormaPago As New Label() With {.Text = "Forma de Pago", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
     Private lblRuta As New Label() With {.Text = "Ruta Asignada", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
-
+    Private WithEvents cboEstado As New ComboBox()
     Private Sub FrmAlbaranes_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         ' Estilos
         FrmPresupuestos.EstilizarGrid(DataGridView1)
@@ -54,7 +54,10 @@ Public Class FrmAlbaranes
         If TextBox5 IsNot Nothing Then TextBox5.Visible = False
         If Button4 IsNot Nothing Then Button4.Visible = False
         If Label23 IsNot Nothing Then Label23.Visible = False
-
+        Me.Controls.Add(cboEstado)
+        cboEstado.DropDownStyle = ComboBoxStyle.DropDownList
+        cboEstado.Items.Clear()
+        cboEstado.Items.AddRange(New String() {"Pendiente", "Entregado", "Facturado"})
         ReorganizarControlesAutomaticamente()
     End Sub
 
@@ -446,7 +449,7 @@ Public Class FrmAlbaranes
                 cmd.Parameters.AddWithValue("@track", TextBoxTracking.Text)
                 cmd.Parameters.AddWithValue("@portes", ComboBoxPortes.Text)
                 cmd.Parameters.AddWithValue("@vend", TextBoxIdVendedor.Text)
-                cmd.Parameters.AddWithValue("@estado", TextBoxEstado.Text)
+                cmd.Parameters.AddWithValue("@estado", cboEstado.Text)
                 cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text)
                 cmd.Parameters.AddWithValue("@FEntrega", DateTimePickerFecha.Value)
                 cmd.Parameters.AddWithValue("@dir", TextBoxDireccion.Text)
@@ -535,7 +538,17 @@ Public Class FrmAlbaranes
                     End If
                 Next
             End If
-
+            ' =========================================================
+            ' MAGIA DE ESTADOS: Marcar Pedido como Servido
+            ' =========================================================
+            If TextBoxPedidoOrigen.Tag IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(TextBoxPedidoOrigen.Tag.ToString()) Then
+                Dim sqlEstado As String = "UPDATE Pedidos SET Estado = 'Servido' WHERE NumeroPedido = @idPed"
+                Using cmdEst As New SQLiteCommand(sqlEstado, c)
+                    cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@idPed", TextBoxPedidoOrigen.Tag.ToString())
+                    cmdEst.ExecuteNonQuery()
+                End Using
+            End If
             trans.Commit()
             MessageBox.Show("Albarán Guardado y Movimientos generados.")
             CargarAlbaran(_numeroAlbaranActual)
@@ -567,7 +580,7 @@ Public Class FrmAlbaranes
                         TextBoxAlbaran.Text = reader("NumeroAlbaran").ToString()
                         If Not IsDBNull(reader("Fecha")) Then TextBoxFecha.Text = Convert.ToDateTime(reader("Fecha")).ToShortDateString()
                         TextBoxObservaciones.Text = If(IsDBNull(reader("Observaciones")), "", reader("Observaciones").ToString())
-                        TextBoxEstado.Text = If(IsDBNull(reader("Estado")), "Pendiente", reader("Estado").ToString())
+                        cboEstado.Text = If(IsDBNull(reader("Estado")), "Pendiente", reader("Estado").ToString())
 
                         TextBoxIdCliente.Text = reader("CodigoCliente").ToString()
                         TextBoxCliente.Text = If(IsDBNull(reader("NombreCliente")), "", reader("NombreCliente").ToString())
@@ -657,7 +670,7 @@ Public Class FrmAlbaranes
         TextBoxFecha.Text = DateTime.Now.ToShortDateString()
         DateTimePickerFecha.Value = DateTime.Now
         TextBoxBase.Text = "0,00" : TextBoxIva.Text = "0,00" : TextBoxTotalAlb.Text = "0,00"
-        TextBoxEstado.Text = "Pendiente"
+        cboEstado.Text = "Pendiente"
 
         ConfigurarGrid()
         _dtLineas = New DataTable()
@@ -955,7 +968,7 @@ Public Class FrmAlbaranes
         If TextBoxIdVendedor IsNot Nothing Then TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 40, 25)
         If TextBoxVendedor IsNot Nothing Then TextBoxVendedor.Bounds = New Rectangle(col1_X + 45, yFila4, 110, 25)
 
-        If TextBoxEstado IsNot Nothing Then TextBoxEstado.Bounds = New Rectangle(col2_X, yFila4, 185, 25)
+        If cboEstado IsNot Nothing Then cboEstado.Bounds = New Rectangle(col2_X, yFila4, 185, 25)
         If cboAgencias IsNot Nothing Then cboAgencias.Bounds = New Rectangle(col3_X, yFila4, 130, 25)
 
         If lblFormaPago IsNot Nothing Then lblFormaPago.Location = New Point(col1_X, yFila5)

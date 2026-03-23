@@ -47,7 +47,6 @@ Partial Class FrmAlbaranes
         TextBoxVendedor = New TextBox()
         TextBoxIdVendedor = New TextBox()
         Label4 = New Label()
-        TextBoxEstado = New TextBox()
         Label6 = New Label()
         TextBoxFecha = New TextBox()
         TextBoxCliente = New TextBox()
@@ -74,15 +73,15 @@ Partial Class FrmAlbaranes
         TextBoxTracking = New TextBox()
         Label31 = New Label()
         TabPage6 = New TabPage()
-        cboAgencias = New ComboBox()
-        Label23 = New Label()
-        Button4 = New Button()
-        TextBox5 = New TextBox()
-        Label21 = New Label()
-        TextBoxObservaciones = New TextBox()
-        btnImportarPedido = New Button()
-        Label20 = New Label()
         TextBoxPedidoOrigen = New TextBox()
+        Label20 = New Label()
+        btnImportarPedido = New Button()
+        TextBoxObservaciones = New TextBox()
+        Label21 = New Label()
+        TextBox5 = New TextBox()
+        Button4 = New Button()
+        Label23 = New Label()
+        cboAgencias = New ComboBox()
         CType(ConexionBDBindingSource1, ComponentModel.ISupportInitialize).BeginInit()
         CType(ConexionBDBindingSource, ComponentModel.ISupportInitialize).BeginInit()
         CType(DataGridView1, ComponentModel.ISupportInitialize).BeginInit()
@@ -97,7 +96,7 @@ Partial Class FrmAlbaranes
         Label9.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label9.Location = New Point(698, 44)
         Label9.Name = "Label9"
-        Label9.Size = New Size(136, 25)
+        Label9.Size = New Size(107, 20)
         Label9.TabIndex = 110
         Label9.Text = "Fecha entrega"
         ' 
@@ -106,7 +105,7 @@ Partial Class FrmAlbaranes
         DateTimePickerFecha.Format = DateTimePickerFormat.Short
         DateTimePickerFecha.Location = New Point(701, 67)
         DateTimePickerFecha.Name = "DateTimePickerFecha"
-        DateTimePickerFecha.Size = New Size(125, 29)
+        DateTimePickerFecha.Size = New Size(125, 25)
         DateTimePickerFecha.TabIndex = 109
         DateTimePickerFecha.Value = New Date(2026, 1, 30, 0, 0, 0, 0)
         ' 
@@ -124,7 +123,7 @@ Partial Class FrmAlbaranes
         LabelStock.Font = New Font("Segoe UI Black", 9.75F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         LabelStock.Location = New Point(1243, 405)
         LabelStock.Name = "LabelStock"
-        LabelStock.Size = New Size(161, 23)
+        LabelStock.Size = New Size(120, 17)
         LabelStock.TabIndex = 106
         LabelStock.Text = "Stock disponible:-"
         ' 
@@ -134,7 +133,7 @@ Partial Class FrmAlbaranes
         Label7.Font = New Font("Segoe UI Black", 12F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label7.Location = New Point(1243, 532)
         Label7.Name = "Label7"
-        Label7.Size = New Size(97, 28)
+        Label7.Size = New Size(76, 21)
         Label7.TabIndex = 104
         Label7.Text = "TOTAL : "
         ' 
@@ -144,7 +143,7 @@ Partial Class FrmAlbaranes
         LabelIva.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         LabelIva.Location = New Point(1243, 486)
         LabelIva.Name = "LabelIva"
-        LabelIva.Size = New Size(62, 25)
+        LabelIva.Size = New Size(49, 20)
         LabelIva.TabIndex = 103
         LabelIva.Text = "I.V.A :"
         ' 
@@ -154,7 +153,7 @@ Partial Class FrmAlbaranes
         LabelBase.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         LabelBase.Location = New Point(1243, 443)
         LabelBase.Name = "LabelBase"
-        LabelBase.Size = New Size(157, 25)
+        LabelBase.Size = New Size(124, 20)
         LabelBase.TabIndex = 102
         LabelBase.Text = "Base imponible :"
         ' 
@@ -167,7 +166,7 @@ Partial Class FrmAlbaranes
         TextBoxTotalAlb.Location = New Point(1273, 531)
         TextBoxTotalAlb.Name = "TextBoxTotalAlb"
         TextBoxTotalAlb.ReadOnly = True
-        TextBoxTotalAlb.Size = New Size(256, 27)
+        TextBoxTotalAlb.Size = New Size(256, 22)
         TextBoxTotalAlb.TabIndex = 101
         TextBoxTotalAlb.TextAlign = HorizontalAlignment.Right
         ' 
@@ -180,7 +179,7 @@ Partial Class FrmAlbaranes
         TextBoxIva.Location = New Point(1273, 486)
         TextBoxIva.Name = "TextBoxIva"
         TextBoxIva.ReadOnly = True
-        TextBoxIva.Size = New Size(256, 25)
+        TextBoxIva.Size = New Size(256, 20)
         TextBoxIva.TabIndex = 100
         TextBoxIva.TextAlign = HorizontalAlignment.Right
         ' 
@@ -193,7 +192,7 @@ Partial Class FrmAlbaranes
         TextBoxBase.Location = New Point(1273, 443)
         TextBoxBase.Name = "TextBoxBase"
         TextBoxBase.ReadOnly = True
-        TextBoxBase.Size = New Size(256, 25)
+        TextBoxBase.Size = New Size(256, 20)
         TextBoxBase.TabIndex = 99
         TextBoxBase.TextAlign = HorizontalAlignment.Right
         ' 
@@ -314,14 +313,14 @@ Partial Class FrmAlbaranes
         ' 
         TextBoxVendedor.Location = New Point(110, 118)
         TextBoxVendedor.Name = "TextBoxVendedor"
-        TextBoxVendedor.Size = New Size(305, 29)
+        TextBoxVendedor.Size = New Size(305, 25)
         TextBoxVendedor.TabIndex = 90
         ' 
         ' TextBoxIdVendedor
         ' 
         TextBoxIdVendedor.Location = New Point(48, 118)
         TextBoxIdVendedor.Name = "TextBoxIdVendedor"
-        TextBoxIdVendedor.Size = New Size(54, 29)
+        TextBoxIdVendedor.Size = New Size(54, 25)
         TextBoxIdVendedor.TabIndex = 89
         ' 
         ' Label4
@@ -330,16 +329,9 @@ Partial Class FrmAlbaranes
         Label4.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label4.Location = New Point(48, 95)
         Label4.Name = "Label4"
-        Label4.Size = New Size(100, 25)
+        Label4.Size = New Size(76, 20)
         Label4.TabIndex = 88
         Label4.Text = "Vendedor"
-        ' 
-        ' TextBoxEstado
-        ' 
-        TextBoxEstado.Location = New Point(423, 118)
-        TextBoxEstado.Name = "TextBoxEstado"
-        TextBoxEstado.Size = New Size(148, 29)
-        TextBoxEstado.TabIndex = 87
         ' 
         ' Label6
         ' 
@@ -347,7 +339,7 @@ Partial Class FrmAlbaranes
         Label6.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label6.Location = New Point(423, 95)
         Label6.Name = "Label6"
-        Label6.Size = New Size(71, 25)
+        Label6.Size = New Size(56, 20)
         Label6.TabIndex = 85
         Label6.Text = "Estado"
         ' 
@@ -355,28 +347,28 @@ Partial Class FrmAlbaranes
         ' 
         TextBoxFecha.Location = New Point(581, 67)
         TextBoxFecha.Name = "TextBoxFecha"
-        TextBoxFecha.Size = New Size(114, 29)
+        TextBoxFecha.Size = New Size(114, 25)
         TextBoxFecha.TabIndex = 83
         ' 
         ' TextBoxCliente
         ' 
         TextBoxCliente.Location = New Point(272, 67)
         TextBoxCliente.Name = "TextBoxCliente"
-        TextBoxCliente.Size = New Size(305, 29)
+        TextBoxCliente.Size = New Size(305, 25)
         TextBoxCliente.TabIndex = 82
         ' 
         ' TextBoxIdCliente
         ' 
         TextBoxIdCliente.Location = New Point(210, 67)
         TextBoxIdCliente.Name = "TextBoxIdCliente"
-        TextBoxIdCliente.Size = New Size(54, 29)
+        TextBoxIdCliente.Size = New Size(54, 25)
         TextBoxIdCliente.TabIndex = 81
         ' 
         ' TextBoxAlbaran
         ' 
         TextBoxAlbaran.Location = New Point(48, 67)
         TextBoxAlbaran.Name = "TextBoxAlbaran"
-        TextBoxAlbaran.Size = New Size(114, 29)
+        TextBoxAlbaran.Size = New Size(114, 25)
         TextBoxAlbaran.TabIndex = 80
         ' 
         ' Label3
@@ -385,7 +377,7 @@ Partial Class FrmAlbaranes
         Label3.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label3.Location = New Point(581, 44)
         Label3.Name = "Label3"
-        Label3.Size = New Size(62, 25)
+        Label3.Size = New Size(49, 20)
         Label3.TabIndex = 79
         Label3.Text = "Fecha"
         ' 
@@ -395,7 +387,7 @@ Partial Class FrmAlbaranes
         Label2.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label2.Location = New Point(210, 44)
         Label2.Name = "Label2"
-        Label2.Size = New Size(73, 25)
+        Label2.Size = New Size(57, 20)
         Label2.TabIndex = 78
         Label2.Text = "Cliente"
         ' 
@@ -405,7 +397,7 @@ Partial Class FrmAlbaranes
         Label1.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label1.Location = New Point(48, 44)
         Label1.Name = "Label1"
-        Label1.Size = New Size(82, 25)
+        Label1.Size = New Size(64, 20)
         Label1.TabIndex = 77
         Label1.Text = "Albaran"
         ' 
@@ -415,7 +407,7 @@ Partial Class FrmAlbaranes
         Label17.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label17.Location = New Point(576, 95)
         Label17.Name = "Label17"
-        Label17.Size = New Size(83, 25)
+        Label17.Size = New Size(65, 20)
         Label17.TabIndex = 126
         Label17.Text = "Agencia"
         ' 
@@ -463,7 +455,7 @@ Partial Class FrmAlbaranes
         Label25.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label25.Location = New Point(6, 5)
         Label25.Name = "Label25"
-        Label25.Size = New Size(96, 25)
+        Label25.Size = New Size(74, 20)
         Label25.TabIndex = 138
         Label25.Text = "Direccion"
         ' 
@@ -473,7 +465,7 @@ Partial Class FrmAlbaranes
         Label26.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label26.Location = New Point(6, 118)
         Label26.Name = "Label26"
-        Label26.Size = New Size(136, 25)
+        Label26.Size = New Size(105, 20)
         Label26.TabIndex = 134
         Label26.Text = "Codigo postal"
         ' 
@@ -482,7 +474,7 @@ Partial Class FrmAlbaranes
         TextBoxCP.BackColor = Color.White
         TextBoxCP.Location = New Point(6, 141)
         TextBoxCP.Name = "TextBoxCP"
-        TextBoxCP.Size = New Size(114, 29)
+        TextBoxCP.Size = New Size(114, 25)
         TextBoxCP.TabIndex = 135
         ' 
         ' Label27
@@ -491,7 +483,7 @@ Partial Class FrmAlbaranes
         Label27.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label27.Location = New Point(6, 57)
         Label27.Name = "Label27"
-        Label27.Size = New Size(100, 25)
+        Label27.Size = New Size(77, 20)
         Label27.TabIndex = 136
         Label27.Text = "Poblacion"
         ' 
@@ -499,7 +491,7 @@ Partial Class FrmAlbaranes
         ' 
         TextBoxPeso.Location = New Point(198, 141)
         TextBoxPeso.Name = "TextBoxPeso"
-        TextBoxPeso.Size = New Size(54, 29)
+        TextBoxPeso.Size = New Size(54, 25)
         TextBoxPeso.TabIndex = 129
         ' 
         ' Label28
@@ -508,7 +500,7 @@ Partial Class FrmAlbaranes
         Label28.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label28.Location = New Point(138, 57)
         Label28.Name = "Label28"
-        Label28.Size = New Size(69, 25)
+        Label28.Size = New Size(54, 20)
         Label28.TabIndex = 133
         Label28.Text = "Portes"
         ' 
@@ -518,7 +510,7 @@ Partial Class FrmAlbaranes
         Label29.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label29.Location = New Point(198, 118)
         Label29.Name = "Label29"
-        Label29.Size = New Size(53, 25)
+        Label29.Size = New Size(42, 20)
         Label29.TabIndex = 128
         Label29.Text = "Peso"
         ' 
@@ -527,14 +519,14 @@ Partial Class FrmAlbaranes
         TextBoxDireccion.BackColor = Color.White
         TextBoxDireccion.Location = New Point(6, 28)
         TextBoxDireccion.Name = "TextBoxDireccion"
-        TextBoxDireccion.Size = New Size(114, 29)
+        TextBoxDireccion.Size = New Size(114, 25)
         TextBoxDireccion.TabIndex = 139
         ' 
         ' TextBoxBultos
         ' 
         TextBoxBultos.Location = New Point(138, 141)
         TextBoxBultos.Name = "TextBoxBultos"
-        TextBoxBultos.Size = New Size(54, 29)
+        TextBoxBultos.Size = New Size(54, 25)
         TextBoxBultos.TabIndex = 127
         ' 
         ' Label30
@@ -543,7 +535,7 @@ Partial Class FrmAlbaranes
         Label30.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label30.Location = New Point(138, 118)
         Label30.Name = "Label30"
-        Label30.Size = New Size(68, 25)
+        Label30.Size = New Size(54, 20)
         Label30.TabIndex = 126
         Label30.Text = "Bultos"
         ' 
@@ -552,7 +544,7 @@ Partial Class FrmAlbaranes
         ComboBoxPortes.FormattingEnabled = True
         ComboBoxPortes.Location = New Point(138, 80)
         ComboBoxPortes.Name = "ComboBoxPortes"
-        ComboBoxPortes.Size = New Size(121, 29)
+        ComboBoxPortes.Size = New Size(121, 25)
         ComboBoxPortes.TabIndex = 132
         ' 
         ' TextBoxPoblacion
@@ -560,14 +552,14 @@ Partial Class FrmAlbaranes
         TextBoxPoblacion.BackColor = Color.White
         TextBoxPoblacion.Location = New Point(6, 80)
         TextBoxPoblacion.Name = "TextBoxPoblacion"
-        TextBoxPoblacion.Size = New Size(114, 29)
+        TextBoxPoblacion.Size = New Size(114, 25)
         TextBoxPoblacion.TabIndex = 137
         ' 
         ' TextBoxTracking
         ' 
         TextBoxTracking.Location = New Point(138, 28)
         TextBoxTracking.Name = "TextBoxTracking"
-        TextBoxTracking.Size = New Size(170, 29)
+        TextBoxTracking.Size = New Size(170, 25)
         TextBoxTracking.TabIndex = 131
         ' 
         ' Label31
@@ -576,7 +568,7 @@ Partial Class FrmAlbaranes
         Label31.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label31.Location = New Point(138, 5)
         Label31.Name = "Label31"
-        Label31.Size = New Size(219, 25)
+        Label31.Size = New Size(170, 20)
         Label31.TabIndex = 130
         Label31.Text = "Codigo de seguimiento"
         ' 
@@ -598,58 +590,22 @@ Partial Class FrmAlbaranes
         TabPage6.TabIndex = 1
         TabPage6.Text = "Detalles y Origen"
         ' 
-        ' cboAgencias
+        ' TextBoxPedidoOrigen
         ' 
-        cboAgencias.FormattingEnabled = True
-        cboAgencias.Location = New Point(577, 118)
-        cboAgencias.Name = "cboAgencias"
-        cboAgencias.Size = New Size(121, 29)
-        cboAgencias.TabIndex = 131
+        TextBoxPedidoOrigen.Location = New Point(6, 26)
+        TextBoxPedidoOrigen.Name = "TextBoxPedidoOrigen"
+        TextBoxPedidoOrigen.Size = New Size(114, 25)
+        TextBoxPedidoOrigen.TabIndex = 124
         ' 
-        ' Label23
+        ' Label20
         ' 
-        Label23.AutoSize = True
-        Label23.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
-        Label23.Location = New Point(6, 68)
-        Label23.Name = "Label23"
-        Label23.Size = New Size(141, 25)
-        Label23.TabIndex = 117
-        Label23.Text = "Observaciones"
-        ' 
-        ' Button4
-        ' 
-        Button4.BackgroundImage = CType(resources.GetObject("Button4.BackgroundImage"), Image)
-        Button4.BackgroundImageLayout = ImageLayout.Zoom
-        Button4.Location = New Point(126, 27)
-        Button4.Name = "Button4"
-        Button4.Size = New Size(29, 25)
-        Button4.TabIndex = 121
-        Button4.UseVisualStyleBackColor = True
-        ' 
-        ' TextBox5
-        ' 
-        TextBox5.Location = New Point(6, 27)
-        TextBox5.Name = "TextBox5"
-        TextBox5.Size = New Size(114, 29)
-        TextBox5.TabIndex = 119
-        ' 
-        ' Label21
-        ' 
-        Label21.AutoSize = True
-        Label21.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
-        Label21.Location = New Point(6, 67)
-        Label21.Name = "Label21"
-        Label21.Size = New Size(141, 25)
-        Label21.TabIndex = 122
-        Label21.Text = "Observaciones"
-        ' 
-        ' TextBoxObservaciones
-        ' 
-        TextBoxObservaciones.Location = New Point(6, 91)
-        TextBoxObservaciones.Multiline = True
-        TextBoxObservaciones.Name = "TextBoxObservaciones"
-        TextBoxObservaciones.Size = New Size(315, 78)
-        TextBoxObservaciones.TabIndex = 123
+        Label20.AutoSize = True
+        Label20.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
+        Label20.Location = New Point(6, 3)
+        Label20.Name = "Label20"
+        Label20.Size = New Size(57, 20)
+        Label20.TabIndex = 125
+        Label20.Text = "Pedido"
         ' 
         ' btnImportarPedido
         ' 
@@ -661,26 +617,62 @@ Partial Class FrmAlbaranes
         btnImportarPedido.TabIndex = 126
         btnImportarPedido.UseVisualStyleBackColor = True
         ' 
-        ' Label20
+        ' TextBoxObservaciones
         ' 
-        Label20.AutoSize = True
-        Label20.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
-        Label20.Location = New Point(6, 3)
-        Label20.Name = "Label20"
-        Label20.Size = New Size(74, 25)
-        Label20.TabIndex = 125
-        Label20.Text = "Pedido"
+        TextBoxObservaciones.Location = New Point(6, 91)
+        TextBoxObservaciones.Multiline = True
+        TextBoxObservaciones.Name = "TextBoxObservaciones"
+        TextBoxObservaciones.Size = New Size(315, 78)
+        TextBoxObservaciones.TabIndex = 123
         ' 
-        ' TextBoxPedidoOrigen
+        ' Label21
         ' 
-        TextBoxPedidoOrigen.Location = New Point(6, 26)
-        TextBoxPedidoOrigen.Name = "TextBoxPedidoOrigen"
-        TextBoxPedidoOrigen.Size = New Size(114, 29)
-        TextBoxPedidoOrigen.TabIndex = 124
+        Label21.AutoSize = True
+        Label21.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
+        Label21.Location = New Point(6, 67)
+        Label21.Name = "Label21"
+        Label21.Size = New Size(111, 20)
+        Label21.TabIndex = 122
+        Label21.Text = "Observaciones"
+        ' 
+        ' TextBox5
+        ' 
+        TextBox5.Location = New Point(6, 27)
+        TextBox5.Name = "TextBox5"
+        TextBox5.Size = New Size(114, 25)
+        TextBox5.TabIndex = 119
+        ' 
+        ' Button4
+        ' 
+        Button4.BackgroundImage = CType(resources.GetObject("Button4.BackgroundImage"), Image)
+        Button4.BackgroundImageLayout = ImageLayout.Zoom
+        Button4.Location = New Point(126, 27)
+        Button4.Name = "Button4"
+        Button4.Size = New Size(29, 25)
+        Button4.TabIndex = 121
+        Button4.UseVisualStyleBackColor = True
+        ' 
+        ' Label23
+        ' 
+        Label23.AutoSize = True
+        Label23.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
+        Label23.Location = New Point(6, 68)
+        Label23.Name = "Label23"
+        Label23.Size = New Size(111, 20)
+        Label23.TabIndex = 117
+        Label23.Text = "Observaciones"
+        ' 
+        ' cboAgencias
+        ' 
+        cboAgencias.FormattingEnabled = True
+        cboAgencias.Location = New Point(577, 118)
+        cboAgencias.Name = "cboAgencias"
+        cboAgencias.Size = New Size(121, 25)
+        cboAgencias.TabIndex = 131
         ' 
         ' FrmAlbaranes
         ' 
-        AutoScaleDimensions = New SizeF(9F, 21F)
+        AutoScaleDimensions = New SizeF(8F, 17F)
         AutoScaleMode = AutoScaleMode.Font
         BackColor = Color.FromArgb(CByte(70), CByte(75), CByte(80))
         ClientSize = New Size(1684, 761)
@@ -709,7 +701,6 @@ Partial Class FrmAlbaranes
         Controls.Add(TextBoxVendedor)
         Controls.Add(TextBoxIdVendedor)
         Controls.Add(Label4)
-        Controls.Add(TextBoxEstado)
         Controls.Add(Label6)
         Controls.Add(TextBoxFecha)
         Controls.Add(TextBoxCliente)
@@ -760,7 +751,6 @@ Partial Class FrmAlbaranes
     Friend WithEvents TextBoxVendedor As TextBox
     Friend WithEvents TextBoxIdVendedor As TextBox
     Friend WithEvents Label4 As Label
-    Friend WithEvents TextBoxEstado As TextBox
     Friend WithEvents Label6 As Label
     Friend WithEvents TextBoxFecha As TextBox
     Friend WithEvents TextBoxCliente As TextBox

@@ -137,6 +137,10 @@ Public Class PagHome
 
         metodoSetStyle.Invoke(Panel, New Object() {ControlStyles.AllPaintingInWmPaint Or
             ControlStyles.UserPaint Or ControlStyles.DoubleBuffer, True})
+        ' =========================================================
+        ' 5. MAGIA INICIAL: ABRIR EL DASHBOARD POR DEFECTO
+        ' =========================================================
+        AbrirFormulario(New FrmDashboard())
     End Sub
     Private Sub ConfigurarTreeViewModerno()
         Dim tv = TvNavegacion ' Asegúrate de que tu control se llame así

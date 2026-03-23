@@ -71,7 +71,6 @@ Partial Class FrmFacturas
         TextBoxVendedor = New TextBox()
         TextBoxIdVendedor = New TextBox()
         Label4 = New Label()
-        TextBoxEstado = New TextBox()
         Label6 = New Label()
         TextBoxFecha = New TextBox()
         TextBoxIdCliente = New TextBox()
@@ -576,13 +575,6 @@ Partial Class FrmFacturas
         Label4.TabIndex = 141
         Label4.Text = "Vendedor"
         ' 
-        ' TextBoxEstado
-        ' 
-        TextBoxEstado.Location = New Point(450, 148)
-        TextBoxEstado.Name = "TextBoxEstado"
-        TextBoxEstado.Size = New Size(148, 25)
-        TextBoxEstado.TabIndex = 140
-        ' 
         ' Label6
         ' 
         Label6.AutoSize = True
@@ -707,7 +699,6 @@ Partial Class FrmFacturas
         Controls.Add(TextBoxVendedor)
         Controls.Add(TextBoxIdVendedor)
         Controls.Add(Label4)
-        Controls.Add(TextBoxEstado)
         Controls.Add(Label6)
         Controls.Add(TextBoxFecha)
         Controls.Add(TextBoxIdCliente)
@@ -785,7 +776,6 @@ Partial Class FrmFacturas
     Friend WithEvents TextBoxVendedor As TextBox
     Friend WithEvents TextBoxIdVendedor As TextBox
     Friend WithEvents Label4 As Label
-    Friend WithEvents TextBoxEstado As TextBox
     Friend WithEvents Label6 As Label
     Friend WithEvents TextBoxFecha As TextBox
     Friend WithEvents TextBoxIdCliente As TextBox

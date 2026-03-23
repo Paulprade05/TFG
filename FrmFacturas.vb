@@ -10,6 +10,7 @@ Public Class FrmFacturas
     Private WithEvents cboRuta As New System.Windows.Forms.ComboBox()
     Private lblFormaPago As New Label() With {.Text = "Forma de Pago", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
     Private lblRuta As New Label() With {.Text = "Ruta Asignada", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
+    Private WithEvents cboEstado As New ComboBox()
     Private Sub FrmFacturas_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         FrmPresupuestos.EstilizarGrid(DataGridView1)
         EstilizarFecha(DateTimePickerFecha)
@@ -43,6 +44,10 @@ Public Class FrmFacturas
         If TextBox5 IsNot Nothing Then TextBox5.Visible = False
         If Button4 IsNot Nothing Then Button4.Visible = False
         If Label23 IsNot Nothing Then Label23.Visible = False
+        Me.Controls.Add(cboEstado)
+        cboEstado.DropDownStyle = ComboBoxStyle.DropDownList
+        cboEstado.Items.Clear()
+        cboEstado.Items.AddRange(New String() {"Pendiente", "Cobrada", "Vencida", "Cancelada"})
         ' --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
         ReorganizarControlesAutomaticamente()
     End Sub
@@ -295,7 +300,7 @@ Public Class FrmFacturas
                 cmd.Parameters.AddWithValue("@peso", If(IsNumeric(TextBoxPeso.Text), CDbl(TextBoxPeso.Text), 0))
                 cmd.Parameters.AddWithValue("@track", TextBoxTracking.Text)
                 cmd.Parameters.AddWithValue("@portes", ComboBoxPortes.Text)
-                cmd.Parameters.AddWithValue("@estado", TextBoxEstado.Text)
+                cmd.Parameters.AddWithValue("@estado", cboEstado.Text)
                 cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text)
 
                 cmd.ExecuteNonQuery()
@@ -391,7 +396,18 @@ Public Class FrmFacturas
                     End If
                 Next
             End If
-
+            ' =========================================================
+            ' MAGIA DE ESTADOS: Marcar Albarán/Pedido como Facturado
+            ' =========================================================
+            If TextBoxAlbaranOrigen.Tag IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(TextBoxAlbaranOrigen.Tag.ToString()) Then
+                ' Suponiendo que facturas desde Albaranes:
+                Dim sqlEstado As String = "UPDATE Albaranes SET Estado = 'Facturado' WHERE NumeroAlbaran = @idOrigen"
+                Using cmdEst As New SQLiteCommand(sqlEstado, c)
+                    cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@idOrigen", TextBoxAlbaranOrigen.Tag.ToString())
+                    cmdEst.ExecuteNonQuery()
+                End Using
+            End If
             trans.Commit()
             MessageBox.Show("Factura Guardada y Registrada correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
             CargarFactura(_numeroFacturaActual)
@@ -437,7 +453,7 @@ Public Class FrmFacturas
                         ' ---------------------------------------------------------
 
                         ' Textos Simples
-                        TextBoxEstado.Text = If(IsDBNull(reader("Estado")), "Emitida", reader("Estado").ToString())
+                        cboEstado.Text = If(IsDBNull(reader("Estado")), "Emitida", reader("Estado").ToString())
                         TextBoxObservaciones.Text = If(IsDBNull(reader("Observaciones")), "", reader("Observaciones").ToString())
 
                         ' Cliente y Dirección
@@ -578,7 +594,7 @@ Public Class FrmFacturas
         TextBoxFecha.Text = DateTime.Now.ToShortDateString()
         DateTimePickerFecha.Value = DateTime.Now.ToShortDateString()
         TextBoxBase.Text = "0,00" : TextBoxTotalAlb.Text = "0,00"
-        TextBoxEstado.Text = "Pendiente"
+        cboEstado.Text = "Pendiente"
         ConfigurarGrid()
         _dtLineas = New DataTable()
         ConfigurarEstructuraDatos()
@@ -1078,7 +1094,7 @@ Public Class FrmFacturas
         If TextBoxIdVendedor IsNot Nothing Then TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 40, 25)
         If TextBoxVendedor IsNot Nothing Then TextBoxVendedor.Bounds = New Rectangle(col1_X + 45, yFila4, 110, 25)
 
-        If TextBoxEstado IsNot Nothing Then TextBoxEstado.Bounds = New Rectangle(col2_X, yFila4, 185, 25)
+        If cboEstado IsNot Nothing Then cboEstado.Bounds = New Rectangle(col2_X, yFila4, 185, 25)
         If cboAgencias IsNot Nothing Then cboAgencias.Bounds = New Rectangle(col3_X, yFila4, 130, 25)
 
         ' --- COMBOS NUEVOS (Forma de pago y Ruta) ---

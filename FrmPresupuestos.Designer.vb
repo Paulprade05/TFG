@@ -34,7 +34,6 @@ Partial Class FrmPresupuestos
         Label5 = New Label()
         Label6 = New Label()
         TextBoxObservaciones = New TextBox()
-        TextBoxEstado = New TextBox()
         TextBoxVendedor = New TextBox()
         TextBoxIdVendedor = New TextBox()
         Label4 = New Label()
@@ -67,7 +66,7 @@ Partial Class FrmPresupuestos
         Label1.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label1.Location = New Point(48, 44)
         Label1.Name = "Label1"
-        Label1.Size = New Size(123, 25)
+        Label1.Size = New Size(96, 20)
         Label1.TabIndex = 0
         Label1.Text = "Presupuesto"
         ' 
@@ -77,7 +76,7 @@ Partial Class FrmPresupuestos
         Label2.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label2.Location = New Point(49, 105)
         Label2.Name = "Label2"
-        Label2.Size = New Size(73, 25)
+        Label2.Size = New Size(57, 20)
         Label2.TabIndex = 1
         Label2.Text = "Cliente"
         ' 
@@ -87,7 +86,7 @@ Partial Class FrmPresupuestos
         Label3.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label3.Location = New Point(216, 44)
         Label3.Name = "Label3"
-        Label3.Size = New Size(62, 25)
+        Label3.Size = New Size(49, 20)
         Label3.TabIndex = 2
         Label3.Text = "Fecha"
         ' 
@@ -95,28 +94,28 @@ Partial Class FrmPresupuestos
         ' 
         TextBoxPresupuesto.Location = New Point(48, 67)
         TextBoxPresupuesto.Name = "TextBoxPresupuesto"
-        TextBoxPresupuesto.Size = New Size(114, 29)
+        TextBoxPresupuesto.Size = New Size(114, 25)
         TextBoxPresupuesto.TabIndex = 3
         ' 
         ' TextBoxIdCliente
         ' 
         TextBoxIdCliente.Location = New Point(49, 128)
         TextBoxIdCliente.Name = "TextBoxIdCliente"
-        TextBoxIdCliente.Size = New Size(71, 29)
+        TextBoxIdCliente.Size = New Size(71, 25)
         TextBoxIdCliente.TabIndex = 4
         ' 
         ' TextBoxCliente
         ' 
         TextBoxCliente.Location = New Point(127, 128)
         TextBoxCliente.Name = "TextBoxCliente"
-        TextBoxCliente.Size = New Size(357, 29)
+        TextBoxCliente.Size = New Size(357, 25)
         TextBoxCliente.TabIndex = 5
         ' 
         ' TextBoxFecha
         ' 
         TextBoxFecha.Location = New Point(216, 67)
         TextBoxFecha.Name = "TextBoxFecha"
-        TextBoxFecha.Size = New Size(114, 29)
+        TextBoxFecha.Size = New Size(114, 25)
         TextBoxFecha.TabIndex = 6
         ' 
         ' Label5
@@ -125,7 +124,7 @@ Partial Class FrmPresupuestos
         Label5.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label5.Location = New Point(423, 168)
         Label5.Name = "Label5"
-        Label5.Size = New Size(141, 25)
+        Label5.Size = New Size(111, 20)
         Label5.TabIndex = 8
         Label5.Text = "Observaciones"
         ' 
@@ -135,7 +134,7 @@ Partial Class FrmPresupuestos
         Label6.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label6.Location = New Point(336, 44)
         Label6.Name = "Label6"
-        Label6.Size = New Size(71, 25)
+        Label6.Size = New Size(56, 20)
         Label6.TabIndex = 9
         Label6.Text = "Estado"
         ' 
@@ -143,28 +142,21 @@ Partial Class FrmPresupuestos
         ' 
         TextBoxObservaciones.Location = New Point(423, 191)
         TextBoxObservaciones.Name = "TextBoxObservaciones"
-        TextBoxObservaciones.Size = New Size(282, 29)
+        TextBoxObservaciones.Size = New Size(282, 25)
         TextBoxObservaciones.TabIndex = 12
-        ' 
-        ' TextBoxEstado
-        ' 
-        TextBoxEstado.Location = New Point(336, 67)
-        TextBoxEstado.Name = "TextBoxEstado"
-        TextBoxEstado.Size = New Size(148, 29)
-        TextBoxEstado.TabIndex = 13
         ' 
         ' TextBoxVendedor
         ' 
         TextBoxVendedor.Location = New Point(111, 191)
         TextBoxVendedor.Name = "TextBoxVendedor"
-        TextBoxVendedor.Size = New Size(305, 29)
+        TextBoxVendedor.Size = New Size(305, 25)
         TextBoxVendedor.TabIndex = 21
         ' 
         ' TextBoxIdVendedor
         ' 
         TextBoxIdVendedor.Location = New Point(49, 191)
         TextBoxIdVendedor.Name = "TextBoxIdVendedor"
-        TextBoxIdVendedor.Size = New Size(54, 29)
+        TextBoxIdVendedor.Size = New Size(54, 25)
         TextBoxIdVendedor.TabIndex = 20
         ' 
         ' Label4
@@ -173,7 +165,7 @@ Partial Class FrmPresupuestos
         Label4.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label4.Location = New Point(49, 168)
         Label4.Name = "Label4"
-        Label4.Size = New Size(100, 25)
+        Label4.Size = New Size(76, 20)
         Label4.TabIndex = 19
         Label4.Text = "Vendedor"
         ' 
@@ -297,7 +289,7 @@ Partial Class FrmPresupuestos
         TextBoxBase.Location = New Point(983, 646)
         TextBoxBase.Name = "TextBoxBase"
         TextBoxBase.ReadOnly = True
-        TextBoxBase.Size = New Size(256, 25)
+        TextBoxBase.Size = New Size(256, 20)
         TextBoxBase.TabIndex = 34
         TextBoxBase.TextAlign = HorizontalAlignment.Right
         ' 
@@ -310,7 +302,7 @@ Partial Class FrmPresupuestos
         TextBoxIva.Location = New Point(1118, 677)
         TextBoxIva.Name = "TextBoxIva"
         TextBoxIva.ReadOnly = True
-        TextBoxIva.Size = New Size(121, 25)
+        TextBoxIva.Size = New Size(121, 20)
         TextBoxIva.TabIndex = 35
         TextBoxIva.TextAlign = HorizontalAlignment.Right
         ' 
@@ -323,7 +315,7 @@ Partial Class FrmPresupuestos
         TextBoxTotalPresup.Location = New Point(991, 708)
         TextBoxTotalPresup.Name = "TextBoxTotalPresup"
         TextBoxTotalPresup.ReadOnly = True
-        TextBoxTotalPresup.Size = New Size(256, 27)
+        TextBoxTotalPresup.Size = New Size(256, 22)
         TextBoxTotalPresup.TabIndex = 36
         TextBoxTotalPresup.TextAlign = HorizontalAlignment.Right
         ' 
@@ -335,7 +327,7 @@ Partial Class FrmPresupuestos
         LabelBase.ForeColor = Color.WhiteSmoke
         LabelBase.Location = New Point(953, 646)
         LabelBase.Name = "LabelBase"
-        LabelBase.Size = New Size(157, 25)
+        LabelBase.Size = New Size(124, 20)
         LabelBase.TabIndex = 37
         LabelBase.Text = "Base imponible :"
         ' 
@@ -346,7 +338,7 @@ Partial Class FrmPresupuestos
         LabelIva.Font = New Font("Segoe UI", 11.25F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         LabelIva.Location = New Point(1035, 677)
         LabelIva.Name = "LabelIva"
-        LabelIva.Size = New Size(62, 25)
+        LabelIva.Size = New Size(49, 20)
         LabelIva.TabIndex = 38
         LabelIva.Text = "I.V.A :"
         ' 
@@ -357,7 +349,7 @@ Partial Class FrmPresupuestos
         Label7.Font = New Font("Segoe UI Black", 12F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         Label7.Location = New Point(961, 709)
         Label7.Name = "Label7"
-        Label7.Size = New Size(97, 28)
+        Label7.Size = New Size(76, 21)
         Label7.TabIndex = 39
         Label7.Text = "TOTAL : "
         ' 
@@ -377,13 +369,13 @@ Partial Class FrmPresupuestos
         LabelStock.Font = New Font("Segoe UI Black", 9.75F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         LabelStock.Location = New Point(1243, 284)
         LabelStock.Name = "LabelStock"
-        LabelStock.Size = New Size(161, 23)
+        LabelStock.Size = New Size(120, 17)
         LabelStock.TabIndex = 41
         LabelStock.Text = "Stock disponible:-"
         ' 
         ' FrmPresupuestos
         ' 
-        AutoScaleDimensions = New SizeF(9F, 21F)
+        AutoScaleDimensions = New SizeF(8F, 17F)
         AutoScaleMode = AutoScaleMode.Font
         BackColor = Color.FromArgb(CByte(70), CByte(75), CByte(80))
         ClientSize = New Size(1829, 911)
@@ -407,7 +399,6 @@ Partial Class FrmPresupuestos
         Controls.Add(TextBoxVendedor)
         Controls.Add(TextBoxIdVendedor)
         Controls.Add(Label4)
-        Controls.Add(TextBoxEstado)
         Controls.Add(TextBoxObservaciones)
         Controls.Add(Label6)
         Controls.Add(Label5)
@@ -443,7 +434,6 @@ Partial Class FrmPresupuestos
     Friend WithEvents Label5 As Label
     Friend WithEvents Label6 As Label
     Friend WithEvents TextBoxObservaciones As TextBox
-    Friend WithEvents TextBoxEstado As TextBox
     Friend WithEvents TextBoxVendedor As TextBox
     Friend WithEvents TextBoxIdVendedor As TextBox
     Friend WithEvents Label4 As Label

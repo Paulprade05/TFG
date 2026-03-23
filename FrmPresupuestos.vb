@@ -11,6 +11,7 @@ Public Class FrmPresupuestos
     'Private WithEvents cboRuta As New ComboBox()
     Private lblFormaPago As New Label() With {.Text = "Forma de Pago", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
     'Private lblRuta As New Label() With {.Text = "Ruta Asignada", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
+    Private WithEvents cboEstado As New ComboBox()
 #End Region
 
 #Region "2. Eventos de Inicialización (Load)"
@@ -23,7 +24,10 @@ Public Class FrmPresupuestos
         cboFormaPago.DropDownStyle = ComboBoxStyle.DropDownList
         'cboRuta.DropDownStyle = ComboBoxStyle.DropDownList
         CargarDesplegables()
-
+        Me.Controls.Add(cboEstado)
+        cboEstado.DropDownStyle = ComboBoxStyle.DropDownList
+        cboEstado.Items.Clear()
+        cboEstado.Items.AddRange(New String() {"Pendiente", "Aceptado", "Rechazado", "Convertido"})
         ReorganizarControlesAutomaticamente()
         ConfigurarColumnasGrid()
 
@@ -133,7 +137,7 @@ Public Class FrmPresupuestos
         TextBoxVendedor.Text = "" : TextBoxIdVendedor.Text = ""
         TextBoxObservaciones.Text = ""
         TextBoxFecha.Text = DateTime.Now.ToShortDateString()
-        TextBoxEstado.Text = "Pendiente"
+        cboEstado.Text = "Pendiente"
         TextBoxBase.Text = "0,00 €" : TextBoxIva.Text = "0,00 €" : TextBoxTotalPresup.Text = "0,00 €"
 
         _dtLineas = New DataTable()
@@ -214,7 +218,7 @@ Public Class FrmPresupuestos
                         TextBoxPresupuesto.Text = r("NumeroPresupuesto").ToString()
                         TextBoxFecha.Text = If(IsDBNull(r("Fecha")), "", Convert.ToDateTime(r("Fecha")).ToShortDateString())
                         TextBoxObservaciones.Text = r("Observaciones").ToString()
-                        TextBoxEstado.Text = r("Estado").ToString()
+                        cboEstado.Text = r("Estado").ToString()
                         TextBoxIdCliente.Text = r("CodigoCliente").ToString()
                         TextBoxCliente.Text = r("NombreCliente").ToString()
                         TextBoxIdVendedor.Text = r("ID_Vendedor").ToString()
@@ -315,7 +319,7 @@ Public Class FrmPresupuestos
                 If DateTime.TryParse(TextBoxFecha.Text, fecha) Then cmd.Parameters.AddWithValue("@fecha", fecha.ToString("yyyy-MM-dd HH:mm:ss")) Else cmd.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
 
                 cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text.Trim())
-                cmd.Parameters.AddWithValue("@est", TextBoxEstado.Text.Trim())
+                cmd.Parameters.AddWithValue("@est", cboEstado.Text.Trim())
                 cmd.Parameters.AddWithValue("@formaPago", idFormaPago)
                 'cmd.Parameters.AddWithValue("@ruta", idRuta)
 
@@ -424,6 +428,7 @@ Public Class FrmPresupuestos
         End If
     End Sub
 
+
     Private Sub Navegar(direccion As String)
         Try
             Dim c = ConexionBD.GetConnection()
@@ -487,6 +492,7 @@ Public Class FrmPresupuestos
         Next
         CalcularTotalesGenerales()
     End Sub
+
 
     ' EL FRENO MÁGICO
     Private Sub DataGridView1_CellBeginEdit(sender As Object, e As DataGridViewCellCancelEventArgs) Handles DataGridView1.CellBeginEdit
@@ -570,6 +576,8 @@ Public Class FrmPresupuestos
         End If
     End Sub
 
+
+
     Private Sub DataGridView1_RowsRemoved(sender As Object, e As DataGridViewRowsRemovedEventArgs) Handles DataGridView1.RowsRemoved
         CalcularTotalesGenerales()
     End Sub
@@ -649,7 +657,7 @@ Public Class FrmPresupuestos
         TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 50, 25)
         TextBoxVendedor.Bounds = New Rectangle(col1_X + 55, yFila4, 85, 25)
         TextBoxObservaciones.Bounds = New Rectangle(col2_X, yFila4, 530, 25)
-        TextBoxEstado.Bounds = New Rectangle(col3_X, yFila4, 140, 25)
+        cboEstado.Bounds = New Rectangle(col3_X, yFila4, 140, 25)
 
         lblFormaPago.Location = New Point(col1_X, yFila5)
         cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 140, 25)

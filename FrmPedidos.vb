@@ -11,6 +11,7 @@ Public Class FrmPedidos
     Private WithEvents cboRuta As New ComboBox()
     Private lblFormaPago As New Label() With {.Text = "Forma de Pago", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
     Private lblRuta As New Label() With {.Text = "Ruta Asignada", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
+    Private WithEvents cboEstado As New ComboBox()
 #End Region
 
 #Region "2. Eventos de Inicialización (Load)"
@@ -24,7 +25,10 @@ Public Class FrmPedidos
         cboFormaPago.DropDownStyle = ComboBoxStyle.DropDownList
         cboRuta.DropDownStyle = ComboBoxStyle.DropDownList
         CargarDesplegables()
-
+        Me.Controls.Add(cboEstado)
+        cboEstado.DropDownStyle = ComboBoxStyle.DropDownList
+        cboEstado.Items.Clear()
+        cboEstado.Items.AddRange(New String() {"Pendiente", "En Preparación", "Servido"})
         ReorganizarControlesAutomaticamente()
         ConfigurarColumnasGrid()
 
@@ -138,7 +142,7 @@ Public Class FrmPedidos
         TextBoxIdPresupuesto.Text = ""
         TextBoxFecha.Text = DateTime.Now.ToShortDateString()
         DateTimePickerFecha.Value = DateTime.Now
-        TextBoxEstado.Text = "Pendiente"
+        cboEstado.Text = "Pendiente"
         TextBoxBase.Text = "0,00 €" : TextBoxIva.Text = "0,00 €" : TextBoxTotalPed.Text = "0,00 €"
 
         _dtLineas = New DataTable()
@@ -218,7 +222,7 @@ Public Class FrmPedidos
                         If Not IsDBNull(r("FechaEntrega")) Then DateTimePickerFecha.Value = Convert.ToDateTime(r("FechaEntrega"))
 
                         TextBoxObservaciones.Text = r("Observaciones").ToString()
-                        TextBoxEstado.Text = r("Estado").ToString()
+                        cboEstado.Text = r("Estado").ToString()
                         TextBoxIdCliente.Text = r("CodigoCliente").ToString()
                         TextBoxCliente.Text = r("NombreCliente").ToString()
                         TextBoxIdVendedor.Text = r("ID_Vendedor").ToString()
@@ -323,7 +327,7 @@ Public Class FrmPedidos
                 cmd.Parameters.AddWithValue("@fechaEnt", DateTimePickerFecha.Value.ToString("yyyy-MM-dd HH:mm:ss"))
 
                 cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text.Trim())
-                cmd.Parameters.AddWithValue("@est", TextBoxEstado.Text.Trim())
+                cmd.Parameters.AddWithValue("@est", cboEstado.Text.Trim())
                 cmd.Parameters.AddWithValue("@formaPago", idFormaPago)
                 cmd.Parameters.AddWithValue("@ruta", idRuta)
 
@@ -373,7 +377,17 @@ Public Class FrmPedidos
                 End Using
                 orden += 1
             Next
-
+            ' =========================================================
+            ' MAGIA DE ESTADOS: Marcar Presupuesto como Convertido
+            ' =========================================================
+            If Not String.IsNullOrWhiteSpace(TextBoxIdPresupuesto.Text) Then
+                Dim sqlEstado As String = "UPDATE Presupuestos SET Estado = 'Convertido' WHERE NumeroPresupuesto = @idPresu"
+                Using cmdEst As New SQLiteCommand(sqlEstado, c)
+                    cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@idPresu", TextBoxIdPresupuesto.Text.Trim())
+                    cmdEst.ExecuteNonQuery()
+                End Using
+            End If
             trans.Commit()
             MessageBox.Show("Guardado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
             CargarPedido(_numeroPedidoActual)
@@ -788,7 +802,7 @@ Public Class FrmPedidos
         TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 50, 25)
         TextBoxVendedor.Bounds = New Rectangle(col1_X + 55, yFila4, 85, 25)
         TextBoxObservaciones.Bounds = New Rectangle(col2_X, yFila4, 530, 25)
-        TextBoxEstado.Bounds = New Rectangle(col3_X, yFila4, 140, 25)
+        cboEstado.Bounds = New Rectangle(col3_X, yFila4, 140, 25)
         If TextBoxIdPresupuesto IsNot Nothing Then TextBoxIdPresupuesto.Bounds = New Rectangle(col4_X, yFila4, 105, 25)
         If btnBuscarPresupuesto IsNot Nothing Then btnBuscarPresupuesto.Bounds = New Rectangle(col4_X + 110, yFila4, 30, 25)
 
