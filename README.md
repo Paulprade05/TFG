@@ -1,66 +1,115 @@
-# 🚀 OPTIMA - ERP Framework para PyMEs
+# 🚀 OPTIMA - Sistema de Gestión Empresarial (ERP)
 
-### *Proyecto de Fin de Grado (TFG) - Desarrollo de Aplicaciones Multiplataforma*
+### *Trabajo de Fin de Grado (TFG) - Desarrollo de Aplicaciones Multiplataforma*
 
-**Autor:** Paul Andrei  
-**Entorno:** Visual Studio 2022  
+**Desarrollado por:** Paul Andrei  
+**Entorno de Desarrollo:** Visual Studio 2022  
 **Lenguaje:** Visual Basic .NET (`VB.NET`)  
-**Base de Datos:** SQLite (Local & Portable)  
-**Interfaz:** Windows Forms con Custom UX/UI  
+**Tecnología de Interfaz:** Windows Forms (`WinForms`)  
+**Base de Datos:** SQLite
 
 ---
 
 ## 📝 Descripción del Proyecto
 
-**OPTIMA** es un sistema de planificación de recursos empresariales (ERP) diseñado para digitalizar el ciclo comercial completo de una pequeña empresa. El proyecto nace bajo la premisa de ofrecer una herramienta robusta, ligera y fácil de usar, eliminando la complejidad de los grandes ERPs pero manteniendo la **trazabilidad documental** profesional.
+OPTIMA es una solución ERP integral diseñada para centralizar y optimizar los flujos de trabajo operativos de una pyme. Este proyecto cubre el ciclo completo de negocio, desde la gestión de inventario y la relación con terceros, hasta el proceso completo de ventas y facturación.
 
-El software gestiona desde el stock físico en almacén hasta la generación de facturas legales, incluyendo un motor de impresión propio y un sistema de cálculo de comisiones dinámico por vendedor.
-
----
-
-## 📋 Módulos del Sistema
-
-### 💰 Ciclo de Ventas e Ingresos
-* **Flujo Documental:** Conversión inteligente de documentos (`Presupuesto` ➔ `Pedido` ➔ `Albarán` ➔ `Factura`) con arrastre automático de líneas, descuentos e impuestos.
-* **Facturación:** Emisión de facturas con cálculo automático de bases imponibles y cuotas de IVA.
-* **Logística:** Gestión de bultos, pesos y agencias de transporte en el proceso de expedición (Albaranes).
-
-### 👥 Gestión de Terceros
-* **Fichas de Clientes y Proveedores:** Centralización de datos fiscales, contactos y condiciones de pago.
-* **Fuerza de Ventas:** Gestión de vendedores con asignación de porcentajes de comisión individuales.
-
-### 📦 Almacén e Inventario
-* **Control de Stock:** Actualización automática de existencias al validar documentos de salida.
-* **Clasificación:** Organización de catálogo por Familias y Artículos.
-* **Kardex:** Histórico de movimientos para auditoría de entradas y salidas.
-
-### 📊 Business Intelligence (Reporting)
-* **Informes PDF:** Generación de reportes profesionales mediante `GDI+` y `PrintDocument`.
-* **Ranking de Ventas:** Visualización de los mejores clientes por volumen de facturación.
-* **Liquidación de Comisiones:** Informe detallado de ventas por comercial y su respectiva comisión devengada.
+El software destaca por su **trazabilidad documental**, permitiendo la conversión inteligente de documentos (Presupuesto ➔ Pedido ➔ Albarán ➔ Factura) y un motor de informes personalizado.
 
 ---
 
-## 🛠️ Hitos Técnicos y Desafíos Superados
+## 🖼️ Interfaz del Proyecto (Capturas de Pantalla)
 
-* **Optimización de UI (Anti-Flickering):** Implementación de llamadas a la API nativa de Windows (`user32.dll`) mediante `SendMessage` y el parámetro `WM_SETREDRAW` para eliminar el parpadeo durante la carga dinámica de formularios.
-* **Arquitectura de Impresión:** Desarrollo de una clase de impresión personalizada que gestiona paginación automática, dibujo de tablas dinámicas y renderizado de logotipos corporativos almacenados como BLOB en la base de datos.
-* **Persistencia Eficiente:** Uso de **SQLite** como motor de base de datos, permitiendo que la aplicación sea 100% portable y no requiera de la instalación de servidores pesados (SQL Server/MySQL).
-* **Diseño Responsive Interno:** Sistema de gestión de formularios hijos (`MDI-style` manual) con anclajes (`Docking` y `Padding`) para asegurar que la interfaz se adapte al tamaño del panel contenedor.
+### 🔐 Acceso y Panel Principal
+> Diseño centrado en la usabilidad y carga optimizada sin parpadeos.
+
+| Pantalla de Acceso (Login) | Panel de Control (Dashboard) |
+| :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/77fb8e18-4aaf-4387-a041-4889babe8098" width="300"/> | <img src="https://github.com/user-attachments/assets/f58d9b6c-bc9d-4f72-ad34-cd482ba8b49e" width="500"/> |
 
 ---
 
-## 🏗️ Estructura del Proyecto
+### 💰 Módulo de Ventas
+Contempla el flujo completo desde la oferta comercial hasta la emisión de la factura legal.
 
-```text
-OPTIMA/
-├── 📂 Clases/           # Capa de Lógica y Datos
-│   ├── ConexionBD.vb    # Singleton de conexión a SQLite
-│   ├── GestorDatos.vb   # Funciones CRUD y consultas SQL
-│   └── ComunSesion.vb   # Persistencia de usuario en sesión
-├── 📂 Formularios/      # Capa de Presentación (UI)
-│   ├── 📂 Ventas        # Presupuestos, Pedidos, Albaranes, Facturas
-│   ├── 📂 Terceros      # Clientes, Proveedores, Vendedores
-│   ├── 📂 Almacen       # Artículos, Familias, Movimientos
-│   └── 📂 Informes      # Ranking, Comisiones, Listados IVA
-└── 📂 Database/         # Esquema y archivos de base de datos
+<details>
+<summary>📸 Ver capturas del Ciclo de Ventas</summary>
+
+#### 1. Presupuesto
+<img src="https://github.com/user-attachments/assets/fc079f8d-c203-4218-a03a-4ea4c9bcde26" width="100%" />
+
+#### 2. Pedido
+<img src="https://github.com/user-attachments/assets/8c16d0db-6ddd-4cbc-aaa0-7521fe922770" width="100%" />
+
+#### 3. Albarán
+<img src="https://github.com/user-attachments/assets/83ade9db-ea03-413b-8d2d-9773552ffa47" width="100%" />
+
+#### 4. Factura
+<img src="https://github.com/user-attachments/assets/5f9a9cfc-d09b-4a49-8291-5fe1e0c28f02" width="100%" />
+
+</details>
+
+---
+
+### 👥 Módulo de Terceros
+Gestión detallada de las entidades con las que interactúa la empresa.
+
+<details>
+<summary>📸 Ver capturas de Clientes y Proveedores</summary>
+
+#### Ficha de Cliente
+<img src="https://github.com/user-attachments/assets/ca124c82-c7ef-40ec-8140-06868c25fe37" width="100%" />
+
+#### Ficha de Proveedor
+<img src="https://github.com/user-attachments/assets/cea24bfd-a9e2-449c-bc52-9529e95e83bd" width="100%" />
+
+</details>
+
+---
+
+### 📦 Módulo de Almacén
+Control de inventario físico, clasificación por familias y registro de movimientos de stock.
+
+<details>
+<summary>📸 Ver capturas de Inventario</summary>
+
+#### Artículos
+<img src="https://github.com/user-attachments/assets/d8865513-5720-40df-8a95-755c7c27e934" width="100%" />
+
+#### Gestión de Familias
+<img src="https://github.com/user-attachments/assets/15347745-97e9-4237-ad3d-c237bf61c712" width="400" />
+
+#### Movimientos de Almacén
+<img src="https://github.com/user-attachments/assets/14d8d8a3-f479-4f4f-91a5-ed0aed6b50ea" width="100%" />
+
+</details>
+
+---
+
+### ⚙️ Módulo de Tablas (Configuración)
+Parametrización global de los elementos maestros del sistema.
+
+<details>
+<summary>📸 Ver capturas de Tablas Maestras</summary>
+
+| Vendedor | Formas de Pago |
+| :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/84f12cad-6975-4ade-86c1-d7126d08c197" width="350"/> | <img src="https://github.com/user-attachments/assets/ded243bc-6062-4a7e-89fc-c8b6b685bbd4" width="350"/> |
+
+| Rutas Logísticas | Agencias de Transporte |
+| :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/d5603a33-7057-412c-b674-de400733cbbf" width="350"/> | <img src="https://github.com/user-attachments/assets/837d5c34-9ac9-46cb-b683-effd753c9d52" width="350"/> |
+
+</details>
+
+---
+
+## 🛠️ Hitos Técnicos
+
+* **Arquitectura de Impresión:** Motor propio basado en `GDI+` para generar informes PDF profesionales con logotipos dinámicos.
+* **Optimización de UI:** Uso de la API nativa de Windows (`SendMessage` / `WM_SETREDRAW`) para garantizar una carga de formularios suave y sin parpadeos (*flickering*).
+* **Base de Datos Portable:** Implementación de SQLite para asegurar la portabilidad total del sistema sin dependencias de servidor pesadas.
+
+---
+
+*Este proyecto es propiedad intelectual de Paul Andrei y ha sido desarrollado como Trabajo de Fin de Grado.*
