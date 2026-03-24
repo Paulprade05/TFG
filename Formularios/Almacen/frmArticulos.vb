@@ -3,64 +3,47 @@ Imports System.Windows.Forms
 Imports System.Data.SQLite
 
 Public Class FrmArticulos
-
-    ' =========================================================
-    ' 1. DECLARACIÓN DE CONTROLES (100% Código)
-    ' =========================================================
     Private WithEvents txtCodigo As New TextBox()
     Private WithEvents txtCodigoBarras As New TextBox()
     Private WithEvents txtDescripcion As New TextBox()
-
     Private WithEvents cboFamilia As New ComboBox()
     Private WithEvents cboProveedor As New ComboBox()
-
     Private WithEvents txtPrecioCompra As New TextBox()
     Private WithEvents txtPrecioVenta As New TextBox()
     Private WithEvents cboIVA As New ComboBox()
-
     Private WithEvents txtStockActual As New TextBox()
     Private WithEvents txtStockMinimo As New TextBox()
     Private WithEvents txtObservaciones As New TextBox()
-
     Private WithEvents btnGuardar As New Button()
     Private WithEvents btnBorrar As New Button()
     Private WithEvents btnNuevo As New Button()
-
     Private WithEvents dgvArticulos As New DataGridView()
     Private _idArticuloActual As Integer = 0
     Private _filtrarSinStockAlAbrir As Boolean = False
 
-    ' =========================================================
-    ' NUEVO CONSTRUCTOR: Recibe la orden del Dashboard
-    ' =========================================================
+    ' Constructor para consultar articulos sin stock
     Public Sub New(Optional soloSinStock As Boolean = False)
         InitializeComponent()
         _filtrarSinStockAlAbrir = soloSinStock
     End Sub
 
-    ' =========================================================
-    ' 2. INICIALIZACIÓN (UNIFICADA)
-    ' =========================================================
     Private Sub FrmArticulos_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.Text = "Gestión de Artículos"
-        Me.BackColor = Color.FromArgb(70, 75, 80) ' Fondo premium
+        Me.BackColor = Color.FromArgb(70, 75, 80)
         Me.MinimumSize = New Size(950, 650)
 
         ConstruirInterfaz()
         ConfigurarGrid()
         CargarDesplegables()
 
-        ' Aquí decidimos qué cargar dependiendo de si venimos del Dashboard o no
+        ' si queremos ver todos los articulos o solo los sin stock
         If _filtrarSinStockAlAbrir Then
-            ' Columna StockActual es la que tienes en la base de datos
             CargarArticulos("WHERE StockActual <= 0")
         Else
             CargarArticulos()
         End If
     End Sub
-    ' =========================================================
-    ' 3. CONSTRUCTOR DE LA INTERFAZ (Bloque compacto y ordenado)
-    ' =========================================================
+
     Private Sub ConstruirInterfaz()
         Dim margenIzq As Integer = 30
 
@@ -68,13 +51,10 @@ Public Class FrmArticulos
         Dim yFila2 As Integer = 85
         Dim yFila3 As Integer = 145
 
-        ' --- Fila 1: Identificación ---
         CrearCampo("Cód. Referencia", txtCodigo, margenIzq, yFila1, 130)
         CrearCampo("Cód. Barras", txtCodigoBarras, 180, yFila1, 150)
-        ' Tamaño fijo y elegante para la descripción (460px), sin estirarse al infinito
         CrearCampo("Descripción del Artículo", txtDescripcion, 350, yFila1, 460)
 
-        ' --- Fila 2: Categorización y Precios ---
         CrearCampo("Familia", cboFamilia, margenIzq, yFila2, 180)
         cboFamilia.DropDownStyle = ComboBoxStyle.DropDownList
 
@@ -88,15 +68,13 @@ Public Class FrmArticulos
         cboIVA.Items.AddRange({"21", "10", "4", "0"})
         cboIVA.DropDownStyle = ComboBoxStyle.DropDownList
 
-        ' --- Fila 3: Stock y Detalles ---
         CrearCampo("Stock Actual", txtStockActual, margenIzq, yFila3, 100)
         CrearCampo("Stock Mín.", txtStockMinimo, 150, yFila3, 100)
 
-        ' Tamaño fijo para observaciones (540px) alineado con el borde de la fila de arriba
         CrearCampo("Observaciones / Detalles Técnicos", txtObservaciones, 270, yFila3, 540)
         txtObservaciones.Height = 45 : txtObservaciones.Multiline = True
 
-        ' --- Línea Divisoria ---
+        ' Línea Divisoria 
         Dim yLinea As Integer = 215
         Dim linea As New Label() With {
             .Bounds = New Rectangle(margenIzq, yLinea, Me.ClientSize.Width - (margenIzq * 2), 2),
@@ -105,14 +83,14 @@ Public Class FrmArticulos
         }
         Me.Controls.Add(linea)
 
-        ' --- Tabla (Con margen inferior para los botones) ---
+        ' Tabla 
         Dim yTabla As Integer = 235
         Dim altoTabla As Integer = Me.ClientSize.Height - yTabla - 80
         dgvArticulos.Bounds = New Rectangle(margenIzq, yTabla, Me.ClientSize.Width - (margenIzq * 2), altoTabla)
         dgvArticulos.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
         Me.Controls.Add(dgvArticulos)
 
-        ' --- Botones (Clavados abajo a la izquierda) ---
+        ' Botones 
         Dim yBotones As Integer = dgvArticulos.Bottom + 20
         ConfigurarBoton(btnGuardar, "Guardar", margenIzq, yBotones, Color.FromArgb(0, 120, 215))
         ConfigurarBoton(btnBorrar, "Borrar", margenIzq + 115, yBotones, Color.FromArgb(209, 52, 56))
@@ -123,7 +101,7 @@ Public Class FrmArticulos
         btnNuevo.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
     End Sub
 
-    ' Método de creación de campos simplificado y con anclaje fijo
+    ' Metodo de creacion de campos 
     Private Sub CrearCampo(textoLabel As String, ctrl As Control, x As Integer, y As Integer, w As Integer)
         Dim lbl As New Label() With {
             .Text = textoLabel,
@@ -141,29 +119,25 @@ Public Class FrmArticulos
             DirectCast(ctrl, TextBox).BorderStyle = BorderStyle.FixedSingle
         End If
 
-        ' Todas las cajas se quedan ancladas a la izquierda, sin estirarse
+        ' Todas las cajas se quedan ancladas a la izquierda
         ctrl.Anchor = AnchorStyles.Top Or AnchorStyles.Left
 
         Me.Controls.Add(ctrl)
     End Sub
 
-    ' =========================================================
-    ' 4. ESTILOS DEL GRID (Diseño unificado del ERP)
-    ' =========================================================
     Private Sub ConfigurarGrid()
-        ' 1. Aplicamos tu diseño oficial
         Try
             FrmPresupuestos.EstilizarGrid(dgvArticulos)
         Catch ex As Exception
         End Try
 
-        ' 2. Ajustes básicos
+        ' 1. Ajustes básicos
         dgvArticulos.AutoGenerateColumns = False
         dgvArticulos.AllowUserToAddRows = False
         dgvArticulos.SelectionMode = DataGridViewSelectionMode.FullRowSelect
-        dgvArticulos.ReadOnly = True ' Se edita desde las cajas de arriba, no directamente en la celda
+        dgvArticulos.ReadOnly = True
 
-        ' 3. Mapeo de columnas
+        ' 2. Mapeo de columnas
         dgvArticulos.Columns.Clear()
 
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "ID_Articulo", .DataPropertyName = "ID_Articulo", .Visible = False})
@@ -174,7 +148,7 @@ Public Class FrmArticulos
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "PrecioVenta", .DataPropertyName = "PrecioVenta", .HeaderText = "P.V.P.", .Width = 90, .DefaultCellStyle = New DataGridViewCellStyle With {.Format = "C2", .Alignment = DataGridViewContentAlignment.MiddleRight}})
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "StockActual", .DataPropertyName = "StockActual", .HeaderText = "Stock", .Width = 80, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleCenter}})
 
-        ' Columnas ocultas (para recuperar los datos al hacer clic en la fila)
+        ' Columnas ocultas 
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "ID_Familia", .DataPropertyName = "ID_Familia", .Visible = False})
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "ID_ProveedorHabitual", .DataPropertyName = "ID_ProveedorHabitual", .Visible = False})
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "TipoIVA", .DataPropertyName = "TipoIVA", .Visible = False})
@@ -188,9 +162,6 @@ Public Class FrmArticulos
         btn.Font = New Font("Segoe UI", 10, FontStyle.Bold) : btn.Cursor = Cursors.Hand
         Me.Controls.Add(btn)
     End Sub
-    ' =========================================================
-    ' MAGIA VISUAL: Ajustar el alto de la tabla al contenido
-    ' =========================================================
     Private Sub AjustarAltoTabla()
         If dgvArticulos Is Nothing Then Return
 
@@ -199,21 +170,19 @@ Public Class FrmArticulos
         For Each fila As DataGridViewRow In dgvArticulos.Rows
             altoNecesario += fila.Height
         Next
-
-        ' Le sumamos un pelín para el borde
+        'sumamos un poco mas para tener un margen                        
         altoNecesario += 3
 
-        ' 2. Calculamos el tope máximo (dejando 80px abajo para los botones)
+        ' 2. Calculamos el tope máximo 
         Dim altoMaximo As Integer = Me.ClientSize.Height - dgvArticulos.Top - 80
 
         ' 3. Ajustamos el alto real del control
         If altoNecesario > altoMaximo Then
-            dgvArticulos.Height = altoMaximo ' Si hay muchos, llega al tope y pone scroll
+            dgvArticulos.Height = altoMaximo
         Else
-            dgvArticulos.Height = altoNecesario ' Si hay pocos, se encoge
+            dgvArticulos.Height = altoNecesario
         End If
 
-        ' Pintamos el fondo que sobra del mismo color que el formulario
         dgvArticulos.BackgroundColor = Me.BackColor
     End Sub
 
@@ -224,18 +193,12 @@ Public Class FrmArticulos
         End If
     End Sub
 
-    ' =========================================================
-    ' 5. LÓGICA DE BASE DE DATOS Y EVENTOS
-    ' =========================================================
-
-
-    ' Ahora admite un filtro opcional
     Private Sub CargarArticulos(Optional filtroSQL As String = "")
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
 
-            ' Si pasamos un filtro (ej: WHERE StockActual <= 0), se lo añade a la consulta
+            ' Si pasamos un filtro se lo añade a la consulta
             Dim sql As String = "SELECT * FROM Articulos " & filtroSQL & " ORDER BY ID_Articulo ASC"
 
             Using da As New SQLiteDataAdapter(sql, c)
@@ -253,7 +216,7 @@ Public Class FrmArticulos
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
 
-            ' --- Cargar Familias (Dejo esto por si lo tienes junto) ---
+            ' Cargar Familias 
             Dim daFam As New SQLiteDataAdapter("SELECT ID_Familia, Nombre FROM Familias", c)
             Dim dtFam As New DataTable()
             daFam.Fill(dtFam)
@@ -261,9 +224,6 @@ Public Class FrmArticulos
             cboFamilia.DisplayMember = "Nombre"
             cboFamilia.ValueMember = "ID_Familia"
 
-            ' =========================================================
-            ' --- CARGAR PROVEEDORES (AQUÍ ESTÁ LA CLAVE) ---
-            ' =========================================================
             ' Leemos el Código y el Nombre de tu tabla Proveedores
             Dim sqlProv As String = "SELECT CodigoProveedor, NombreFiscal FROM Proveedores ORDER BY NombreFiscal"
             Using daProv As New SQLiteDataAdapter(sqlProv, c)
@@ -271,8 +231,8 @@ Public Class FrmArticulos
                 daProv.Fill(dtProv)
 
                 cboProveedor.DataSource = dtProv
-                cboProveedor.DisplayMember = "NombreFiscal"      ' El texto que ves (Nvidia)
-                cboProveedor.ValueMember = "CodigoProveedor" ' El código oculto (PROV-004) <--- ESTO FALLABA
+                cboProveedor.DisplayMember = "NombreFiscal"
+                cboProveedor.ValueMember = "CodigoProveedor"
                 cboProveedor.SelectedIndex = -1
             End Using
 
@@ -306,25 +266,21 @@ Public Class FrmArticulos
                     cboFamilia.SelectedIndex = -1
                 End If
 
-                ' =========================================================
-                ' CARGAR PROVEEDOR (Método blindado y definitivo)
-                ' =========================================================
                 Dim idProv = fila.Cells("ID_ProveedorHabitual").Value
 
                 If Not IsDBNull(idProv) AndAlso idProv IsNot Nothing AndAlso idProv.ToString().Trim() <> "" Then
                     Dim valorProv As String = idProv.ToString().Trim()
 
-                    ' Intento 1: Asignación directa
+
                     cboProveedor.SelectedValue = valorProv
 
-                    ' Intento 2 (El Infalible): Si WinForms se pone tonto y sigue en blanco, lo buscamos a la fuerza
+                    ' lo buscamos a la fuerza
                     If cboProveedor.SelectedIndex = -1 Then
                         For i As Integer = 0 To cboProveedor.Items.Count - 1
                             Dim filaVista As DataRowView = TryCast(cboProveedor.Items(i), DataRowView)
-                            ' Comprobamos si el código de esta fila coincide con "PROV-004"
                             If filaVista IsNot Nothing AndAlso filaVista("CodigoProveedor").ToString() = valorProv Then
                                 cboProveedor.SelectedIndex = i
-                                Exit For ' Lo hemos pillado, paramos de buscar
+                                Exit For
                             End If
                         Next
                     End If

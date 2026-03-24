@@ -3,10 +3,6 @@ Imports System.Windows.Forms
 Imports System.Data.SQLite
 
 Public Class FrmFamilias
-
-    ' =========================================================
-    ' 1. DECLARACIÓN DE CONTROLES
-    ' =========================================================
     Private WithEvents txtCodigo As New TextBox()
     Private WithEvents txtNombre As New TextBox()
     Private WithEvents txtDescripcion As New TextBox()
@@ -19,9 +15,6 @@ Public Class FrmFamilias
 
     Private _idFamiliaActual As Integer = 0
 
-    ' =========================================================
-    ' 2. INICIALIZACIÓN (Diseño Claro)
-    ' =========================================================
     Private Sub FrmFamilias_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.Text = "Gestión de Familias"
         Me.BackColor = Color.WhiteSmoke ' Fondo claro y limpio
@@ -37,22 +30,19 @@ Public Class FrmFamilias
         CargarFamilias()
     End Sub
 
-    ' =========================================================
-    ' 3. CONSTRUCTOR DE LA INTERFAZ
-    ' =========================================================
     Private Sub ConstruirInterfaz()
         Dim margenIzq As Integer = 20
         Dim yFila1 As Integer = 20
         Dim yFila2 As Integer = 80
 
-        ' --- FUNCIÓN PARA CREAR CAMPOS (Adaptada al tema claro) ---
+        ' FUNCIÓN PARA CREAR CAMPOS 
         Dim CrearCampo = Sub(textoLabel As String, ctrl As Control, x As Integer, y As Integer, w As Integer)
                              Dim lbl As New Label() With {
                                  .Text = textoLabel,
                                  .Location = New Point(x, y),
                                  .AutoSize = True,
                                  .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold),
-                                 .ForeColor = Color.FromArgb(50, 50, 50) ' Texto oscuro
+                                 .ForeColor = Color.FromArgb(50, 50, 50)
                              }
                              Me.Controls.Add(lbl)
 
@@ -69,24 +59,24 @@ Public Class FrmFamilias
                              Me.Controls.Add(ctrl)
                          End Sub
 
-        ' --- DIBUJAMOS LOS CAMPOS ---
-        ' Fila 1: Código y Nombre alineados
+
+        ' Fila 1: Codigo y Nombre alineados
         CrearCampo("Código", txtCodigo, margenIzq, yFila1, 100)
         CrearCampo("Nombre de la Familia", txtNombre, margenIzq + 120, yFila1, 380)
 
-        ' Fila 2: Descripción
+        ' Fila 2: Descripcion
         CrearCampo("Descripción (Opcional)", txtDescripcion, margenIzq, yFila2, 500)
 
-        ' --- BOTONES ---
+        ' BOTONES
         Dim yBotones As Integer = 145
         ConfigurarBoton(btnGuardar, "Guardar", margenIzq, yBotones, Color.FromArgb(0, 120, 215))
         ConfigurarBoton(btnBorrar, "Borrar", margenIzq + 110, yBotones, Color.FromArgb(209, 52, 56))
         ConfigurarBoton(btnNuevo, "Nuevo", margenIzq + 220, yBotones, Color.FromArgb(40, 140, 90))
 
-        ' --- LÍNEA DIVISORIA ---
+        'LINEA DIVISORIA
         Dim linea As New Label() With {
             .Bounds = New Rectangle(margenIzq, yBotones + 50, 500, 2),
-            .BackColor = Color.FromArgb(200, 200, 200) ' Gris suave
+            .BackColor = Color.FromArgb(200, 200, 200)
         }
         Me.Controls.Add(linea)
 
@@ -103,12 +93,10 @@ Public Class FrmFamilias
         Me.Controls.Add(btn)
     End Sub
 
-    ' Estilo claro para la tabla, igual que en Artículos
-    ' =========================================================
-    ' 4. ESTILOS DEL GRID (Diseño unificado del ERP)
-    ' =========================================================
+
+
     Private Sub ConfigurarGrid()
-        ' 1. Aplicamos tu diseño oficial
+        ' 1. Aplicamos diseño 
         Try
             FrmPresupuestos.EstilizarGrid(dgvFamilias)
         Catch ex As Exception
@@ -129,9 +117,6 @@ Public Class FrmFamilias
         dgvFamilias.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Descripcion", .DataPropertyName = "Descripcion", .HeaderText = "Descripción", .Width = 180})
     End Sub
 
-    ' =========================================================
-    ' MAGIA VISUAL: Ajustar el alto de la tabla al contenido
-    ' =========================================================
     Private Sub AjustarAltoTabla()
         If dgvFamilias Is Nothing Then Return
 
@@ -141,21 +126,18 @@ Public Class FrmFamilias
             altoNecesario += fila.Height
         Next
 
-        ' Le sumamos un pelín para el borde
         altoNecesario += 3
 
         ' 2. Calculamos el tope máximo 
-        ' (Como es una ventana pequeña, calculamos el alto total menos el Top de la tabla y dejamos un margen de 20)
         Dim altoMaximo As Integer = Me.ClientSize.Height - dgvFamilias.Top - 20
 
         ' 3. Ajustamos el alto real del control
         If altoNecesario > altoMaximo Then
-            dgvFamilias.Height = altoMaximo ' Si hay muchos, pone scroll
+            dgvFamilias.Height = altoMaximo
         Else
-            dgvFamilias.Height = altoNecesario ' Si hay pocos, se encoge
+            dgvFamilias.Height = altoNecesario
         End If
 
-        ' Pintamos el fondo que sobra del mismo color que el formulario
         dgvFamilias.BackgroundColor = Me.BackColor
     End Sub
 

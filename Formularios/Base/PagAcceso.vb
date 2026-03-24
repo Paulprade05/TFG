@@ -1,33 +1,41 @@
 ﻿Imports System.Drawing.Drawing2D
+Imports System.Data.SQLite ' Necesario para leer la BD
 
 Public Class PagAcceso
 
     ' Creamos el panel central por código (La "Tarjeta" de Login)
     Private PanelLogin As New Panel()
+
+    ' NUEVO: Creamos el CheckBox para recordar credenciales
+    Private CheckBoxRecordar As New CheckBox()
+
     ' Importamos la función nativa para congelar el dibujo de la ventana
     Private Declare Function SendMessage Lib "user32" Alias "SendMessageA" (ByVal hWnd As IntPtr, ByVal wMsg As Integer, ByVal wParam As Integer, ByVal lParam As Integer) As Integer
     Private Const WM_SETREDRAW As Integer = &HB
-    Public Sub New()
-        ' 1. Esta llamada es obligatoria para el diseñador
-        InitializeComponent()
 
-        ' 2. TRUCO MAESTRO: Movemos el formulario a "Cuenca" (fuera del monitor) 
-        ' para que se dibuje en el vacío absoluto.
+    Public Sub New()
+        InitializeComponent()
         Me.StartPosition = FormStartPosition.Manual
         Me.Location = New Point(-10000, -10000)
 
-        ' 3. Construimos todo ya mismo
         ConstruirInterfazPremium()
     End Sub
-    Private Sub PagAcceso_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        ' La interfaz ya se construyó en el New, así que aquí solo centramos y mostramos
-        CentrarPanelLogin()
 
-        ' Traemos el formulario al centro de la pantalla del usuario
+    Private Sub PagAcceso_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        CentrarPanelLogin()
         Me.Location = New Point((Screen.PrimaryScreen.WorkingArea.Width - Me.Width) \ 2,
                             (Screen.PrimaryScreen.WorkingArea.Height - Me.Height) \ 2)
 
-        ' Forzamos un repintado final limpio
+        ' NUEVO 1: Cargar las empresas en el ComboBox
+        CargarEmpresas()
+
+        ' NUEVO 2: Leer los datos guardados de la última sesión
+        If My.Settings.SavedUser <> "" Then
+            TextBoxUsuario.Text = My.Settings.SavedUser
+            TextBoxPassword.Text = My.Settings.SavedPass
+            CheckBoxRecordar.Checked = True
+        End If
+
         Me.Refresh()
     End Sub
 
@@ -39,40 +47,44 @@ Public Class PagAcceso
         PanelLogin.Size = New Size(400, 520)
         PanelLogin.BackColor = Color.FromArgb(220, 25, 35, 45)
 
-        ' NUEVO: Activamos DoubleBuffer por reflexión para evitar parpadeos en el panel transparente
         Dim meth = GetType(Control).GetMethod("SetStyle", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
         meth.Invoke(PanelLogin, New Object() {ControlStyles.AllPaintingInWmPaint Or ControlStyles.UserPaint Or ControlStyles.DoubleBuffer, True})
 
         Me.Controls.Add(PanelLogin)
 
-        ' --- B) ATRAPAR EL LOGO DEL DISEÑADOR ---
-        ' Busca el PictureBox que tienes en el diseño visual y lo mete en la tarjeta
+        ' --- B) ATRAPAR EL LOGO ---
         Dim picLogo As PictureBox = Me.Controls.OfType(Of PictureBox)().FirstOrDefault()
-
         If picLogo IsNot Nothing Then
             PanelLogin.Controls.Add(picLogo)
-            picLogo.Bounds = New Rectangle(50, 30, 300, 100) ' Lo coloca exacto arriba del centro
-            picLogo.BackColor = Color.Transparent ' Para que se funda con la tarjeta oscura
-            picLogo.SizeMode = PictureBoxSizeMode.Zoom ' Para que no se deforme
+            picLogo.Bounds = New Rectangle(50, 30, 300, 100)
+            picLogo.BackColor = Color.Transparent
+            picLogo.SizeMode = PictureBoxSizeMode.Zoom
             picLogo.BringToFront()
         End If
 
-        ' --- C) ORDENAR CAJAS DE TEXTO Y LABELS ---
-        ConfigurarCajaTexto(TextBoxUsuario, "USUARIO", 50, 160)
-        ConfigurarCajaTexto(TextBoxPassword, "CONTRASEÑA", 50, 240)
+        ' --- C) ORDENAR CAJAS DE TEXTO ---
+        ConfigurarCajaTexto(TextBoxUsuario, "USUARIO", 50, 150)
+        ConfigurarCajaTexto(TextBoxPassword, "CONTRASEÑA", 50, 230)
+
+        ' --- NUEVO: CONFIGURAR CHECKBOX "RECORDAR" ---
+        PanelLogin.Controls.Add(CheckBoxRecordar)
+        CheckBoxRecordar.Bounds = New Rectangle(50, 285, 200, 20)
+        CheckBoxRecordar.Text = "Recordar mis datos"
+        CheckBoxRecordar.ForeColor = Color.FromArgb(200, 200, 200)
+        CheckBoxRecordar.Font = New Font("Segoe UI", 9)
+        CheckBoxRecordar.BackColor = Color.Transparent
+        CheckBoxRecordar.Cursor = Cursors.Hand
 
         ' --- D) CONFIGURAR EL BOTÓN DEL OJITO ---
-        ' Lo colocamos justo encima del final de la caja de contraseña
         PanelLogin.Controls.Add(ButtonVerPasswd)
-        ButtonVerPasswd.Bounds = New Rectangle(315, 267, 33, 26)
+        ButtonVerPasswd.Bounds = New Rectangle(315, 257, 33, 26) ' Ajustado a la nueva altura
         ButtonVerPasswd.FlatStyle = FlatStyle.Flat
         ButtonVerPasswd.FlatAppearance.BorderSize = 0
         ButtonVerPasswd.BackColor = Color.White
         ButtonVerPasswd.Cursor = Cursors.Hand
         ButtonVerPasswd.BringToFront()
-
-        ' --- E) CONFIGURAR EL COMBOBOX EMPRESA (Opcional) ---
-        ' Busca el ComboBox en tu formulario y lo ordena
+        TextBoxPassword.UseSystemPasswordChar = True
+        ' --- E) CONFIGURAR EL COMBOBOX EMPRESA ---
         Dim cmbEmpresa As ComboBox = Me.Controls.OfType(Of ComboBox).FirstOrDefault()
         If cmbEmpresa IsNot Nothing Then
             ConfigurarLabel("EMPRESA", 50, 320)
@@ -86,22 +98,48 @@ Public Class PagAcceso
         PanelLogin.Controls.Add(ButtonCrearUsuario)
         PanelLogin.Controls.Add(ButtonAcceso)
 
-        ' Matemáticas: Ancho total 300. Botón 1 = 140, Hueco = 20, Botón 2 = 140.
         EstilizarBoton(ButtonCrearUsuario, 50, 420, 140, 40, Color.FromArgb(80, 90, 100), "Crear")
         EstilizarBoton(ButtonAcceso, 210, 420, 140, 40, Color.FromArgb(0, 120, 215), "Entrar")
 
-        ' Centrar por primera vez
         CentrarPanelLogin()
+    End Sub
+    Private Sub ButtonCrearUsuario_Click(sender As Object, e As EventArgs) Handles ButtonCrearUsuario.Click
+        Dim frmRegistro As New FrmCrearUsuario()
+        frmRegistro.ShowDialog() ' ShowDialog congela la pantalla de atrás hasta que se cierre esta
     End Sub
 
     ' =========================================================
-    ' 2. FUNCIONES DE DISEÑO AUTOMÁTICO
+    ' 2. FUNCIONES DE BASE DE DATOS Y DISEÑO
     ' =========================================================
-    Private Sub ConfigurarCajaTexto(txt As TextBox, titulo As String, x As Integer, y As Integer)
-        ' 1. Crea la etiqueta del título
-        ConfigurarLabel(titulo, x, y)
 
-        ' 2. Mete la caja de texto en la tarjeta y le da estilo
+    ' NUEVO: MÉTODO PARA CARGAR LAS EMPRESAS
+    Private Sub CargarEmpresas()
+        Dim cmbEmpresa As ComboBox = PanelLogin.Controls.OfType(Of ComboBox).FirstOrDefault()
+        If cmbEmpresa Is Nothing Then Return
+
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+
+            Dim sql As String = "SELECT ID, NombreFiscal FROM Empresa"
+            Using cmd As New SQLiteCommand(sql, c)
+                Dim da As New SQLiteDataAdapter(cmd)
+                Dim dt As New DataTable()
+                da.Fill(dt)
+
+                If dt.Rows.Count > 0 Then
+                    cmbEmpresa.DataSource = dt
+                    cmbEmpresa.DisplayMember = "NombreFiscal"
+                    cmbEmpresa.ValueMember = "ID"
+                End If
+            End Using
+        Catch ex As Exception
+            ' Si falla la carga, simplemente no rompe el programa
+        End Try
+    End Sub
+
+    Private Sub ConfigurarCajaTexto(txt As TextBox, titulo As String, x As Integer, y As Integer)
+        ConfigurarLabel(titulo, x, y)
         If txt IsNot Nothing Then
             PanelLogin.Controls.Add(txt)
             txt.Bounds = New Rectangle(x, y + 25, 300, 30)
@@ -114,7 +152,7 @@ Public Class PagAcceso
         Dim lbl As New Label()
         lbl.Text = texto
         lbl.Font = New Font("Segoe UI", 9, FontStyle.Bold)
-        lbl.ForeColor = Color.FromArgb(200, 200, 200) ' Gris clarito elegante
+        lbl.ForeColor = Color.FromArgb(200, 200, 200)
         lbl.AutoSize = True
         lbl.Location = New Point(x, y)
         PanelLogin.Controls.Add(lbl)
@@ -137,7 +175,6 @@ Public Class PagAcceso
         PanelLogin.Location = New Point((Me.ClientSize.Width - PanelLogin.Width) \ 2, (Me.ClientSize.Height - PanelLogin.Height) \ 2)
     End Sub
 
-    ' Si la ventana cambia de tamaño, volvemos a centrar automáticamente
     Private Sub PagAcceso_Resize(sender As Object, e As EventArgs) Handles MyBase.Resize
         CentrarPanelLogin()
     End Sub
@@ -146,35 +183,75 @@ Public Class PagAcceso
     ' 3. LÓGICA DE INTERACCIÓN (ACCESOS Y OJITO)
     ' =========================================================
     Private Sub ButtonVerPass_MouseDown(sender As Object, e As MouseEventArgs) Handles ButtonVerPasswd.MouseDown
-        TextBoxPassword.UseSystemPasswordChar = False ' Muestra la contraseña
+        TextBoxPassword.UseSystemPasswordChar = False
     End Sub
 
     Private Sub ButtonVerPass_MouseUp(sender As Object, e As MouseEventArgs) Handles ButtonVerPasswd.MouseUp
-        TextBoxPassword.UseSystemPasswordChar = True  ' Oculta la contraseña
+        TextBoxPassword.UseSystemPasswordChar = True
     End Sub
 
+    ' NUEVO: VERIFICACIÓN DE USUARIO Y GUARDADO DE CREDENCIALES
     Private Sub ButtonAcceso_Click(sender As Object, e As EventArgs) Handles ButtonAcceso.Click
-        If String.IsNullOrWhiteSpace(TextBoxUsuario.Text) OrElse String.IsNullOrWhiteSpace(TextBoxPassword.Text) Then
+        Dim usr As String = TextBoxUsuario.Text.Trim()
+        Dim pwd As String = TextBoxPassword.Text.Trim()
+
+        If String.IsNullOrWhiteSpace(usr) OrElse String.IsNullOrWhiteSpace(pwd) Then
             MessageBox.Show("Por favor, introduce usuario y contraseña.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning)
             Return
         End If
 
-        ComunSesionActual.Usuario = TextBoxUsuario.Text
-        ComunSesionActual.Contrasena = TextBoxPassword.Text
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
 
-        Dim PagHome As New PagHome()
-        AddHandler PagHome.FormClosed, Sub(s, args) Me.Close()
-        PagHome.Show()
-        Me.Hide()
+            ' CONSULTA A LA BASE DE DATOS (Asegúrate de que tu tabla se llama "Usuarios" y las columnas "Usuario" y "Contrasena")
+            ' SI SE LLAMAN DISTINTO, CAMBIA LOS NOMBRES AQUÍ
+            Dim sql As String = "SELECT COUNT(*) FROM Usuarios WHERE NombreUsuario = @u AND Password = @p"
+            Using cmd As New SQLiteCommand(sql, c)
+                cmd.Parameters.AddWithValue("@u", usr)
+                cmd.Parameters.AddWithValue("@p", pwd)
+
+                Dim existe As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+
+                If existe > 0 Then
+                    ' ¡EL USUARIO EXISTE Y LA PASS ES CORRECTA!
+
+                    ' Guardamos o borramos las credenciales según el CheckBox
+                    If CheckBoxRecordar.Checked Then
+                        My.Settings.SavedUser = usr
+                        My.Settings.SavedPass = pwd
+                    Else
+                        My.Settings.SavedUser = ""
+                        My.Settings.SavedPass = ""
+                    End If
+                    My.Settings.Save() ' Fuerza el guardado en el disco
+
+                    ComunSesionActual.Usuario = usr
+                    ComunSesionActual.Contrasena = pwd
+
+                    Dim PagHome As New PagHome()
+                    AddHandler PagHome.FormClosed, Sub(s, args) Me.Close()
+                    PagHome.Show()
+                    Me.Hide()
+                Else
+                    MessageBox.Show("Usuario o contraseña incorrectos. Revisa tus credenciales.", "Acceso Denegado", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                End If
+            End Using
+
+        Catch ex As Exception
+            MessageBox.Show("Error al conectar con la base de datos: " & ex.Message, "Error Critico", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
     End Sub
 
-    ' Pulsar ENTER en la contraseña para entrar rápido
     Private Sub TextBoxPassword_KeyDown(sender As Object, e As KeyEventArgs) Handles TextBoxPassword.KeyDown
         If e.KeyCode = Keys.Enter Then
             ButtonAcceso.PerformClick()
             e.SuppressKeyPress = True
         End If
     End Sub
+
+
+
 
 End Class
 
