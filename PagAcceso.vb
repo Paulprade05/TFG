@@ -4,21 +4,31 @@ Public Class PagAcceso
 
     ' Creamos el panel central por código (La "Tarjeta" de Login)
     Private PanelLogin As New Panel()
+    ' Importamos la función nativa para congelar el dibujo de la ventana
+    Private Declare Function SendMessage Lib "user32" Alias "SendMessageA" (ByVal hWnd As IntPtr, ByVal wMsg As Integer, ByVal wParam As Integer, ByVal lParam As Integer) As Integer
+    Private Const WM_SETREDRAW As Integer = &HB
+    Public Sub New()
+        ' 1. Esta llamada es obligatoria para el diseñador
+        InitializeComponent()
 
-    Private Sub PagAcceso_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        ConexionBD.GetConnection()
+        ' 2. TRUCO MAESTRO: Movemos el formulario a "Cuenca" (fuera del monitor) 
+        ' para que se dibuje en el vacío absoluto.
+        Me.StartPosition = FormStartPosition.Manual
+        Me.Location = New Point(-10000, -10000)
 
-        ' Abrir a pantalla completa
-        ' 1. Ventana normal flotante, centrada en la pantalla del usuario
-        Me.WindowState = FormWindowState.Normal
-        Me.Size = New Size(500, 600) ' Puedes cambiar estos números para hacerla más ancha o alta
-        Me.StartPosition = FormStartPosition.CenterScreen
-
-        ' 2. Construir toda la interfaz por código
+        ' 3. Construimos todo ya mismo
         ConstruirInterfazPremium()
+    End Sub
+    Private Sub PagAcceso_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        ' La interfaz ya se construyó en el New, así que aquí solo centramos y mostramos
+        CentrarPanelLogin()
 
-        ' 3. Ocultar la contraseña por defecto
-        TextBoxPassword.UseSystemPasswordChar = True
+        ' Traemos el formulario al centro de la pantalla del usuario
+        Me.Location = New Point((Screen.PrimaryScreen.WorkingArea.Width - Me.Width) \ 2,
+                            (Screen.PrimaryScreen.WorkingArea.Height - Me.Height) \ 2)
+
+        ' Forzamos un repintado final limpio
+        Me.Refresh()
     End Sub
 
     ' =========================================================
@@ -26,9 +36,13 @@ Public Class PagAcceso
     ' =========================================================
     Private Sub ConstruirInterfazPremium()
         ' --- A) CREAR LA TARJETA CENTRAL ---
-        ' Color oscuro semi-transparente (RGBA: 220 de opacidad, y un azul noche 25, 35, 45)
         PanelLogin.Size = New Size(400, 520)
         PanelLogin.BackColor = Color.FromArgb(220, 25, 35, 45)
+
+        ' NUEVO: Activamos DoubleBuffer por reflexión para evitar parpadeos en el panel transparente
+        Dim meth = GetType(Control).GetMethod("SetStyle", Reflection.BindingFlags.NonPublic Or Reflection.BindingFlags.Instance)
+        meth.Invoke(PanelLogin, New Object() {ControlStyles.AllPaintingInWmPaint Or ControlStyles.UserPaint Or ControlStyles.DoubleBuffer, True})
+
         Me.Controls.Add(PanelLogin)
 
         ' --- B) ATRAPAR EL LOGO DEL DISEÑADOR ---
@@ -195,13 +209,7 @@ Public Class PanelTransparente
         End Set
     End Property
 
-    Protected Overrides ReadOnly Property CreateParams As CreateParams
-        Get
-            Dim cp As CreateParams = MyBase.CreateParams
-            cp.ExStyle = cp.ExStyle Or &H20 ' WS_EX_TRANSPARENT
-            Return cp
-        End Get
-    End Property
+
 
     Protected Overrides Sub OnPaintBackground(e As PaintEventArgs)
         ' No pintamos fondo estándar
@@ -234,4 +242,13 @@ Public Class PanelTransparente
             e.Graphics.DrawImage(_logo, posX, posY, nuevoAncho, nuevoAlto)
         End If
     End Sub
+    Protected Overrides ReadOnly Property CreateParams As CreateParams
+        Get
+            Dim cp As CreateParams = MyBase.CreateParams
+            ' WS_EX_COMPOSITED (0x02000000) - Pinta todos los controles de una vez 
+            ' de abajo hacia arriba en una sola pasada de memoria.
+            cp.ExStyle = cp.ExStyle Or &H2000000
+            Return cp
+        End Get
+    End Property
 End Class

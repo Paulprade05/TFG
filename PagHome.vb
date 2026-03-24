@@ -3,6 +3,10 @@ Imports System.IO
 Imports System.Windows.Forms.VisualStyles.VisualStyleElement
 Imports System.Drawing.Imaging ' <--- NECESARIO PARA CAMBIAR COLORES
 Public Class PagHome
+    Private formularioActivo As Form = Nothing
+    ' Importamos la función nativa de Windows para congelar el dibujo
+    Private Declare Function SendMessage Lib "user32" Alias "SendMessageA" (ByVal hWnd As IntPtr, ByVal wMsg As Integer, ByVal wParam As Integer, ByVal lParam As Integer) As Integer
+    Private Const WM_SETREDRAW As Integer = &HB
     Private Sub PagHome_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         ' 1. CONFIGURACIÓN DEL MENÚ LATERAL (TREEVIEW)
         ' Fijamos el ancho y lo anclamos a la izquierda para que ocupe todo el alto
@@ -187,32 +191,54 @@ Public Class PagHome
         formHijo.Show()
     End Sub
     Private Sub TvNavegacion_NodeMouseClick(sender As Object, e As TreeNodeMouseClickEventArgs) Handles TvNavegacion.NodeMouseClick
-        ' Evitamos error si pulsan en un nodo padre que no abre nada (como "Ventas" o "Compras")
-        ' Si tus nodos padre no deben abrir nada, puedes filtrar aquí.
+        ' Si hacen clic con el botón derecho, lo ignoramos
+        If e.Button <> MouseButtons.Left Then Return
 
-        Select Case e.Node.Name
-        ' --- VENTAS ---
-            Case "NodoPresupuesto"
-            ' AbrirFormularioEnPanel(New FrmPresupuestos()) 
-            ' Nota: Descomenta la línea de arriba cuando tengas creado el form
+        ' Quitamos espacios sobrantes por si acaso con .Trim()
+        Select Case e.Node.Text.Trim()
 
-            Case "NodoFacturas"
-                ' Aquí llamas a tu formulario de facturas real
-                ' AbrirFormularioEnPanel(New FrmFacturas())
-                ' Línea temporal para probar
+            ' --- VENTAS ---
+            Case "Presupuestos", "Presupuesto"
+                AbrirFormulario(New FrmPresupuestos())
+            Case "Pedidos", "Pedido"
+                AbrirFormulario(New FrmPedidos())
+            Case "Facturas", "Factura"
+                AbrirFormulario(New FrmFacturas())
+            Case "Albaranes", "Albaran", "Albarán"
+                AbrirFormulario(New FrmAlbaranes())
 
-        ' --- COMPRAS ---
-            Case "NodoProveedor"
-            ' AbrirFormularioEnPanel(New FrmProveedores())
+            ' --- TERCEROS ---
+            Case "Clientes", "Cliente"
+                AbrirFormulario(New FrmClientes())
+            Case "Proveedores", "Proveedor"
+                AbrirFormulario(New FrmProveedores())
 
-        ' --- ALMACEN ---
-            Case "NodoArticulos"
-                AbrirFormularioEnPanel(New frmArticulos())
+            ' --- ALMACEN ---
+            Case "Artículos", "Articulos", "Artículo", "Articulo" ' <--- CUBRIMOS TODAS LAS OPCIONES
+                AbrirFormulario(New frmArticulos())
+            Case "Familias", "Familia"
+                Dim frm As New FrmFamilias()
+                frm.ShowDialog()
+            Case "Movimientos de almacen", "Movimientos de almacén"
+                AbrirFormulario(New FrmMovimientos())
 
-        ' --- CONFIGURACIÓN / SALIR ---
-            Case "NodoSalir" ' Si añades un botón de salir
-                Me.Close()
+            ' --- TABLAS ---
+            Case "Vendedores", "Vendedor"
+                Dim frm As New FrmVendedores()
+                frm.ShowDialog()
+            Case "Formas de pago", "Forma de pago"
+                Dim frm As New FrmFormPag()
+                frm.ShowDialog()
+            Case "Rutas", "Ruta"
+                Dim frm As New FrmRutas()
+                frm.ShowDialog()
+            Case "Agencias", "Agencia"
+                Dim frm As New FrmAgencias()
+                frm.ShowDialog()
 
+            ' --- CONFIGURACIÓN ---
+            Case "Empresa"
+                'AbrirFormulario(New FrmEmpresa())
         End Select
     End Sub
     Private Sub TvNavegacion_DrawNode(sender As Object, e As DrawTreeNodeEventArgs) Handles TvNavegacion.DrawNode
@@ -288,82 +314,56 @@ Public Class PagHome
     End Sub
     ' 3. EVENTO DE PINTADO (Copia y pega este evento en tu código)
     ' Evento que salta al clicar un nodo del árbol
-    Private Sub TreeView1_AfterSelect(sender As Object, e As TreeViewEventArgs) Handles TvNavegacion.AfterSelect
 
-        ' Usamos Select Case para ver qué nodo se ha pulsado
-        ' Recomendación: Usa e.Node.Name (nombre interno) o e.Node.Text (texto visible)
-
-        Select Case e.Node.Text
-        ' --- VENTAS ---
-            Case "Presupuestos"
-                AbrirFormulario(New FrmPresupuestos())
-            Case "Pedidos"
-                AbrirFormulario(New FrmPedidos())
-            Case "Facturas"
-                AbrirFormulario(New FrmFacturas())
-            Case "Albaranes"
-                AbrirFormulario(New FrmAlbaranes())
-
-        ' --- TERCEROS ---
-            Case "Clientes"
-                AbrirFormulario(New FrmClientes())
-            Case "Proveedores"
-                AbrirFormulario(New FrmProveedores())
-
-        ' --- ALMACEN ---
-            Case "Artículos"
-                AbrirFormulario(New frmArticulos())
-            Case "Familias"
-                Dim frm As New FrmFamilias()
-                frm.ShowDialog()
-            Case "Movimientos de almacen"
-                AbrirFormulario(New FrmMovimientos())
-
-        ' --- TABLAS ---
-            Case "Vendedores"
-                Dim frm As New FrmVendedores()
-                frm.ShowDialog()
-            Case "Formas de pago"
-                Dim frm As New FrmFormPag()
-                frm.ShowDialog()
-            Case "Rutas"
-                Dim frm As New FrmRutas()
-                frm.ShowDialog()
-            Case "Agencias"
-                Dim frm As New FrmAgencias()
-                frm.ShowDialog()
-        ' --- CONFIGURACIÓN ---
-            Case "Empresa"
-                'AbrirFormulario(New FrmEmpresa())
-
-                ' Caso por defecto: Si clicas un nodo padre (ej: "Ventas") que no haga nada
-            Case Else
-                ' No hacer nada
-        End Select
-    End Sub
 
     ' --- MÉTODO PRO PARA GESTIONAR FORMULARIOS EN EL PANEL ---
-    Private Sub AbrirFormulario(formularioHijo As Form)
-        ' 1. Limpiar el panel por si había otro formulario abierto antes
-        If Panel.Controls.Count > 0 Then
-            Panel.Controls(0).Dispose()
-        End If
-
-        ' 2. Configurar el formulario para que no sea una ventana independiente
-        formularioHijo.TopLevel = False
-        formularioHijo.FormBorderStyle = FormBorderStyle.None ' Quitamos los bordes
-        formularioHijo.Dock = DockStyle.Fill ' Que ocupe todo el panel
+    ' Variable global en PagHome para saber qué tenemos en pantalla
 
 
-        ' 3. Añadirlo al panel y mostrarlo
-        Panel.Controls.Add(formularioHijo)
-        Panel.Tag = formularioHijo ' Guardamos referencia
-        formularioHijo.Show()
+    Public Sub AbrirFormulario(formularioHijo As Form)
+        ' 1. CONGELAMOS el panel para que no se vea nada de lo que pasa dentro
+        SendMessage(Panel.Handle, WM_SETREDRAW, 0, 0)
+
+        Try
+            If formularioActivo IsNot Nothing Then
+                If formularioActivo.GetType() = formularioHijo.GetType() Then
+                    If Not TypeOf formularioActivo Is FrmDashboard Then
+                        ' Si volvemos al dashboard, también congelamos antes
+                        formularioActivo.Close()
+                        formularioActivo = New FrmDashboard()
+                    Else
+                        ' Si ya estamos, descongelamos y salimos
+                        SendMessage(Panel.Handle, WM_SETREDRAW, 1, 0)
+                        Return
+                    End If
+                Else
+                    formularioActivo.Close()
+                    formularioActivo = formularioHijo
+                End If
+            Else
+                formularioActivo = formularioHijo
+            End If
+
+            ' 2. PREPARAMOS EL HIJO (Él sigue creyendo que se está dibujando, pero Windows no lo muestra)
+            formularioActivo.TopLevel = False
+            formularioActivo.FormBorderStyle = FormBorderStyle.None
+            formularioActivo.Dock = DockStyle.Fill
+
+            Panel.Controls.Clear()
+            Panel.Controls.Add(formularioActivo)
+            formularioActivo.Show()
+
+            ' 3. FORZAMOS AL HIJO A REORGANIZARSE (Aquí es donde ocurría el fantasma)
+            formularioActivo.Refresh()
+
+        Finally
+            ' 4. LIBERAMOS el panel y ordenamos que se pinte TODO DE GOLPE
+            SendMessage(Panel.Handle, WM_SETREDRAW, 1, 0)
+            Panel.Refresh()
+        End Try
     End Sub
 
-    Private Sub TvNavegacion_AfterSelect(sender As Object, e As TreeViewEventArgs) Handles TvNavegacion.AfterSelect
 
-    End Sub
 
 
     Private Sub CargarDatosEmpresa()
@@ -444,13 +444,13 @@ Public Class PagHome
     End Sub
 
     Private Sub InformeVentasCliente_Click(sender As Object, e As EventArgs)
-        ' Para saber qué clientes compran más y aplicarles rappels o descuentos a final de año.
-        MsgBox("Abriendo Ranking de Clientes...", MsgBoxStyle.Information, "Informes")
+        ' Abre el Ranking
+        AbrirFormulario(New FrmInformeRankingClientes())
     End Sub
 
     Private Sub InformeVentasVendedor_Click(sender As Object, e As EventArgs)
         ' Suma las ventas de cada comercial para calcular sus comisiones a final de mes.
-        MsgBox("Abriendo Comisiones por Vendedor...", MsgBoxStyle.Information, "Informes")
+        AbrirFormulario(New FrmInformeComisionesVendedor())
     End Sub
 
     ' 2. OPERACIONES

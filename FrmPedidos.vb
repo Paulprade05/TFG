@@ -16,6 +16,8 @@ Public Class FrmPedidos
 
 #Region "2. Eventos de Inicialización (Load)"
     Private Sub FrmPedidos_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Me.SuspendLayout()
+
         ConfigurarDiseñoResponsive()
         EstilizarGrid(DataGridView1)
 
@@ -38,6 +40,7 @@ Public Class FrmPedidos
         Else
             LimpiarFormulario()
         End If
+        Me.ResumeLayout(True)
     End Sub
 
     Private Sub CargarDesplegables()
@@ -308,23 +311,32 @@ Public Class FrmPedidos
             Dim sql As String = ""
             If esNuevo Then
                 sql = "INSERT INTO Pedidos (NumeroPedido, NumeroPresupuesto, CodigoCliente, ID_Vendedor, Fecha, FechaEntrega, Observaciones, Estado, ID_FormaPago, ID_Ruta, BaseImponible, ImporteIVA, Total) " &
-                      "VALUES (@num, @numpres, @cli, @vend, @fecha, @fechaEnt, @obs, @est, @formaPago, @ruta, @base, @iva, @total)"
+                  "VALUES (@num, @numpres, @cli, @vend, @fecha, @fechaEnt, @obs, @est, @formaPago, @ruta, @base, @iva, @total)"
             Else
                 sql = "UPDATE Pedidos SET NumeroPresupuesto=@numpres, CodigoCliente=@cli, ID_Vendedor=@vend, Fecha=@fecha, FechaEntrega=@fechaEnt, Observaciones=@obs, Estado=@est, ID_FormaPago=@formaPago, ID_Ruta=@ruta, BaseImponible=@base, ImporteIVA=@iva, Total=@total " &
-                      "WHERE NumeroPedido = @num"
+                  "WHERE NumeroPedido = @num"
             End If
 
             Using cmd As New SQLiteCommand(sql, c)
                 cmd.Transaction = trans
                 cmd.Parameters.AddWithValue("@num", _numeroPedidoActual)
-
                 cmd.Parameters.AddWithValue("@cli", TextBoxIdCliente.Text.Trim())
                 cmd.Parameters.AddWithValue("@vend", idVend)
+
                 Dim idPresu As Object = If(String.IsNullOrWhiteSpace(TextBoxIdPresupuesto.Text), DBNull.Value, TextBoxIdPresupuesto.Text.Trim())
                 cmd.Parameters.AddWithValue("@numpres", idPresu)
+
+                ' --- CORRECCIÓN FECHAS ---
                 Dim fecha As DateTime
-                If DateTime.TryParse(TextBoxFecha.Text, fecha) Then cmd.Parameters.AddWithValue("@fecha", fecha.ToString("yyyy-MM-dd HH:mm:ss")) Else cmd.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                If DateTime.TryParse(TextBoxFecha.Text, fecha) Then
+                    cmd.Parameters.AddWithValue("@fecha", fecha.ToString("yyyy-MM-dd HH:mm:ss"))
+                Else
+                    cmd.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                End If
+
+                ' Aquí estaba el error, ahora asigamos @fechaEnt correctamente al DateTimePicker
                 cmd.Parameters.AddWithValue("@fechaEnt", DateTimePickerFecha.Value.ToString("yyyy-MM-dd HH:mm:ss"))
+                ' -------------------------
 
                 cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text.Trim())
                 cmd.Parameters.AddWithValue("@est", cboEstado.Text.Trim())
@@ -442,6 +454,12 @@ Public Class FrmPedidos
                         TextBoxIdVendedor.Text = If(IsDBNull(r("ID_Vendedor")), "", r("ID_Vendedor").ToString())
                         TextBoxVendedor.Text = If(IsDBNull(r("NombreVend")), "", r("NombreVend").ToString())
                         TextBoxObservaciones.Text = $"Generado desde Presupuesto {codigoPresupuesto}."
+                        Dim idFPago = r("ID_FormaPago")
+                        If Not IsDBNull(idFPago) AndAlso idFPago IsNot Nothing AndAlso idFPago.ToString() <> "" Then
+                            cboFormaPago.SelectedValue = Convert.ToInt32(idFPago)
+                        Else
+                            cboFormaPago.SelectedIndex = -1 ' Se queda en blanco si el presupuesto no tenía
+                        End If
                         TextBoxIdPresupuesto.Text = codigoPresupuesto
                     End If
                 End Using

@@ -16,6 +16,8 @@ Public Class FrmPresupuestos
 
 #Region "2. Eventos de Inicialización (Load)"
     Private Sub FrmPresupuestos_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Me.SuspendLayout()
+
         ConfigurarDiseñoResponsive()
         EstilizarGrid(DataGridView1)
 
@@ -37,6 +39,7 @@ Public Class FrmPresupuestos
         Else
             LimpiarFormulario()
         End If
+        Me.ResumeLayout(True)
     End Sub
 
     Private Sub CargarDesplegables()

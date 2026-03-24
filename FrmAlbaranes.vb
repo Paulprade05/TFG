@@ -14,6 +14,8 @@ Public Class FrmAlbaranes
     Private lblRuta As New Label() With {.Text = "Ruta Asignada", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
     Private WithEvents cboEstado As New ComboBox()
     Private Sub FrmAlbaranes_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Me.SuspendLayout()
+
         ' Estilos
         FrmPresupuestos.EstilizarGrid(DataGridView1)
         EstilizarFecha(DateTimePickerFecha)
@@ -59,6 +61,7 @@ Public Class FrmAlbaranes
         cboEstado.Items.Clear()
         cboEstado.Items.AddRange(New String() {"Pendiente", "Entregado", "Facturado"})
         ReorganizarControlesAutomaticamente()
+        Me.ResumeLayout(True)
     End Sub
 
     Private Sub CargarDesplegables()
@@ -98,7 +101,6 @@ Public Class FrmAlbaranes
         If Not _dtLineas.Columns.Contains("Total") Then _dtLineas.Columns.Add("Total", GetType(Decimal))
         If Not _dtLineas.Columns.Contains("TotalConIVA") Then _dtLineas.Columns.Add("TotalConIVA", GetType(Decimal))
 
-        If Not _dtLineas.Columns.Contains("ID_LineaPedido") Then _dtLineas.Columns.Add("ID_LineaPedido", GetType(Object))
     End Sub
 
     Private Sub ConfigurarGrid()
@@ -135,36 +137,30 @@ Public Class FrmAlbaranes
         End Using
     End Sub
 
-    Private Sub btnImportarPedido_Click_1(sender As Object, e As EventArgs) Handles btnImportarPedido.Click
-        Using frm As New FrmBuscador
-            frm.TablaABuscar = "Pedidos"
-            If frm.ShowDialog = DialogResult.OK Then
-                Dim codPresu = frm.Resultado
-                If Not String.IsNullOrEmpty(codPresu) Then ImportarDatosPresupuesto(codPresu)
-            End If
-        End Using
-    End Sub
+
 
     Private Sub ImportarDatosPedido(numeroPedido As String)
         Dim c = ConexionBD.GetConnection()
         Try
             If c.State <> ConnectionState.Open Then c.Open()
 
-            Dim sqlCab As String = "SELECT P.*, C.NombreFiscal, C.Direccion, C.Poblacion, C.CodigoPostal " &
-                                   "FROM Pedidos P " &
-                                   "LEFT JOIN Clientes C ON P.ID_Cliente = C.ID_Cliente " &
-                                   "LEFT JOIN Vendedores V ON P.ID_Vendedor=V.ID_Vendedor " &
-                                   "WHERE P.NumeroPedido = @num"
+            ' 1. Cabecera (Importante: SELECT P.* trae ID_Ruta y ID_FormaPago)
+            Dim sqlCab As String = "SELECT P.*, C.NombreFiscal, C.Direccion, C.Poblacion, C.CodigoPostal, V.Nombre AS NombreVend " &
+                               "FROM Pedidos P " &
+                               "LEFT JOIN Clientes C ON P.CodigoCliente = C.CodigoCliente " &
+                               "LEFT JOIN Vendedores V ON P.ID_Vendedor = V.ID_Vendedor " &
+                               "WHERE P.NumeroPedido = @num"
 
             Using cmd As New SQLiteCommand(sqlCab, c)
                 cmd.Parameters.AddWithValue("@num", numeroPedido)
                 Using r = cmd.ExecuteReader()
                     If r.Read() Then
                         LimpiarFormulario()
-                        TextBoxPedidoOrigen.Text = numeroPedido
-                        TextBoxPedidoOrigen.Tag = numeroPedido
 
-                        TextBoxIdCliente.Text = r("ID_Cliente").ToString()
+                        ' Guardamos el número de pedido origen (para cambiarle el estado al guardar)
+                        TextBoxPedidoOrigen.Text = numeroPedido
+
+                        TextBoxIdCliente.Text = r("CodigoCliente").ToString()
                         TextBoxCliente.Text = r("NombreFiscal").ToString()
                         TextBoxIdVendedor.Text = If(IsDBNull(r("ID_Vendedor")), "", r("ID_Vendedor").ToString())
                         TextBoxVendedor.Text = If(IsDBNull(r("NombreVend")), "", r("NombreVend").ToString())
@@ -173,10 +169,26 @@ Public Class FrmAlbaranes
                         TextBoxPoblacion.Text = If(IsDBNull(r("Poblacion")), "", r("Poblacion").ToString())
                         TextBoxCP.Text = If(IsDBNull(r("CodigoPostal")), "", r("CodigoPostal").ToString())
                         TextBoxObservaciones.Text = "Generado desde Pedido " & numeroPedido
+
+                        ' --- FORMA DE PAGO Y RUTA ---
+                        Dim idFPago = r("ID_FormaPago")
+                        If Not IsDBNull(idFPago) AndAlso idFPago IsNot Nothing AndAlso idFPago.ToString() <> "" Then
+                            cboFormaPago.SelectedValue = Convert.ToInt32(idFPago)
+                        Else
+                            cboFormaPago.SelectedIndex = -1
+                        End If
+
+                        Dim idRuta = r("ID_Ruta")
+                        If Not IsDBNull(idRuta) AndAlso idRuta IsNot Nothing AndAlso idRuta.ToString() <> "" Then
+                            cboRuta.SelectedValue = Convert.ToInt32(idRuta)
+                        Else
+                            cboRuta.SelectedIndex = -1
+                        End If
                     End If
                 End Using
             End Using
 
+            ' 2. Líneas del Pedido
             Dim sqlLin As String = "SELECT * FROM LineasPedido WHERE NumeroPedido = @num ORDER BY NumeroOrden ASC"
             Dim dtOrigen As New DataTable()
             Using cmd As New SQLiteCommand(sqlLin, c)
@@ -189,117 +201,48 @@ Public Class FrmAlbaranes
             For Each rowOrig As DataRow In dtOrigen.Rows
                 Dim rowNew As DataRow = _dtLineas.NewRow()
 
+                ' Aquí pondrás el número del nuevo Albarán cuando se genere al guardar
                 rowNew("NumeroAlbaran") = _numeroAlbaranActual
-                rowNew("ID_Linea") = DBNull.Value
+                rowNew("ID_Linea") = DBNull.Value ' Obligamos a que sea un INSERT
                 rowNew("NumeroOrden") = rowOrig("NumeroOrden")
                 rowNew("ID_Articulo") = rowOrig("ID_Articulo")
                 rowNew("Descripcion") = rowOrig("Descripcion")
 
+                ' --- MATEMÁTICAS ---
                 Dim cant As Decimal = 0 : Decimal.TryParse(rowOrig("Cantidad").ToString(), cant)
                 Dim pr As Decimal = 0 : Decimal.TryParse(rowOrig("PrecioUnitario").ToString(), pr)
                 Dim dt As Decimal = 0 : Decimal.TryParse(rowOrig("Descuento").ToString(), dt)
-
                 Dim iva As Decimal = 21
                 If dtOrigen.Columns.Contains("PorcentajeIVA") AndAlso Not IsDBNull(rowOrig("PorcentajeIVA")) Then
                     Decimal.TryParse(rowOrig("PorcentajeIVA").ToString(), iva)
                 End If
 
+                ' En el albarán, la cantidad servida suele ser por defecto toda la que se pidió
                 rowNew("CantidadServida") = cant
                 rowNew("PrecioUnitario") = pr
                 rowNew("Descuento") = dt
                 rowNew("PorcentajeIVA") = iva
-
                 rowNew("PrecioConIVA") = pr * (1 + (iva / 100))
+
                 Dim totalSinIva As Decimal = (cant * pr) * (1 - (dt / 100))
                 rowNew("Total") = totalSinIva
                 rowNew("TotalConIVA") = totalSinIva * (1 + (iva / 100))
 
-                rowNew("ID_LineaPedido") = rowOrig("ID_Linea")
+                ' Guardamos el rastro: qué línea de pedido es esta
+
 
                 _dtLineas.Rows.Add(rowNew)
             Next
 
             CalcularTotalesGenerales()
-            MessageBox.Show("Datos del Pedido cargados.")
+            MessageBox.Show("Datos del Pedido cargados correctamente.", "Importación", MessageBoxButtons.OK, MessageBoxIcon.Information)
 
         Catch ex As Exception
-            MessageBox.Show("Error al importar: " & ex.Message)
+            MessageBox.Show("Error al importar el pedido: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
-    Private Sub ImportarDatosPresupuesto(CodigoPedido As String)
-        Dim c = ConexionBD.GetConnection()
-        Try
-            If c.State <> ConnectionState.Open Then c.Open()
 
-            Dim sqlCab As String = "SELECT P.*, C.NombreFiscal, V.Nombre AS NombreVend FROM Pedidos P " &
-                                   "LEFT JOIN Clientes C ON P.CodigoCliente=C.CodigoCliente " &
-                                   "LEFT JOIN Vendedores V ON P.ID_Vendedor=V.ID_Vendedor " &
-                                   "WHERE P.NumeroPedido = @num"
-            Using cmd As New SQLiteCommand(sqlCab, c)
-                cmd.Parameters.AddWithValue("@num", CodigoPedido)
-                Using r = cmd.ExecuteReader()
-                    If r.Read() Then
-                        LimpiarFormulario()
-                        TextBoxIdCliente.Text = r("CodigoCliente").ToString()
-                        TextBoxCliente.Text = r("NombreFiscal").ToString()
-                        TextBoxIdVendedor.Text = If(IsDBNull(r("ID_Vendedor")), "", r("ID_Vendedor").ToString())
-                        TextBoxVendedor.Text = If(IsDBNull(r("NombreVend")), "", r("NombreVend").ToString())
-                        DateTimePickerFecha.Value = r("FechaEntrega")
-                        TextBoxObservaciones.Text = $"Desde Pedido {CodigoPedido}. "
-                        If TextBoxPedidoOrigen IsNot Nothing Then
-                            TextBoxPedidoOrigen.Text = CodigoPedido
-                            TextBoxPedidoOrigen.Tag = CodigoPedido
-                        End If
-                    End If
-                End Using
-            End Using
-
-            Dim sqlLin As String = "SELECT * FROM LineasPedido WHERE NumeroPedido = @num ORDER BY NumeroOrden ASC"
-            Dim dtOrigen As New DataTable()
-            Using cmd As New SQLiteCommand(sqlLin, c)
-                cmd.Parameters.AddWithValue("@num", CodigoPedido)
-                Dim da As New SQLiteDataAdapter(cmd)
-                da.Fill(dtOrigen)
-            End Using
-
-            _dtLineas.Rows.Clear()
-            For Each rowOrig As DataRow In dtOrigen.Rows
-                Dim rowNew As DataRow = _dtLineas.NewRow()
-
-                rowNew("NumeroAlbaran") = _numeroAlbaranActual
-                rowNew("ID_Linea") = DBNull.Value
-                rowNew("NumeroOrden") = rowOrig("NumeroOrden")
-                rowNew("ID_Articulo") = rowOrig("ID_Articulo")
-                rowNew("Descripcion") = rowOrig("Descripcion")
-
-                Dim ca As Decimal = 0 : Decimal.TryParse(rowOrig("Cantidad").ToString(), ca)
-                Dim pr As Decimal = 0 : Decimal.TryParse(rowOrig("PrecioUnitario").ToString(), pr)
-                Dim dt As Decimal = 0 : Decimal.TryParse(rowOrig("Descuento").ToString(), dt)
-
-                Dim iva As Decimal = 21
-                If dtOrigen.Columns.Contains("PorcentajeIVA") AndAlso Not IsDBNull(rowOrig("PorcentajeIVA")) Then
-                    Decimal.TryParse(rowOrig("PorcentajeIVA").ToString(), iva)
-                End If
-
-                rowNew("CantidadServida") = ca
-                rowNew("PrecioUnitario") = pr
-                rowNew("Descuento") = dt
-                rowNew("PorcentajeIVA") = iva
-
-                rowNew("PrecioConIVA") = pr * (1 + (iva / 100))
-                Dim totalSinIva As Decimal = (ca * pr) * (1 - (dt / 100))
-                rowNew("Total") = totalSinIva
-                rowNew("TotalConIVA") = totalSinIva * (1 + (iva / 100))
-
-                _dtLineas.Rows.Add(rowNew)
-            Next
-            CalcularTotalesGenerales()
-            MessageBox.Show("Pedido importado.")
-        Catch ex As Exception
-            MessageBox.Show("Error al importar: " & ex.Message)
-        End Try
-    End Sub
 
     ' =========================================================
     ' 3. CALCULO Y GRID
@@ -423,12 +366,16 @@ Public Class FrmAlbaranes
             Next
 
             ' B) Guardar Cabecera
+            Dim idAgencia As Object = If(cboAgencias.SelectedValue IsNot Nothing AndAlso cboAgencias.SelectedIndex <> -1, cboAgencias.SelectedValue, DBNull.Value)
+            Dim idFormaPago As Object = If(cboFormaPago.SelectedValue IsNot Nothing AndAlso cboFormaPago.SelectedIndex <> -1, cboFormaPago.SelectedValue, DBNull.Value)
+            Dim idVend As Object = If(IsNumeric(TextBoxIdVendedor.Text) AndAlso Val(TextBoxIdVendedor.Text) > 0, Convert.ToInt32(TextBoxIdVendedor.Text), DBNull.Value)
+
             Dim sql As String
             If esNuevo Then
-                sql = "INSERT INTO Albaranes (NumeroAlbaran, NumeroPedido, Fecha, CodigoCliente, ID_Agencia, NumeroBultos, PesoTotal, CodigoSeguimiento, Portes, Estado, Observaciones, DireccionEnvio, Poblacion, CodigoPostal, FechaEntrega, BaseImponible, ImporteIVA, Total, ID_Vendedor) " &
-                      "VALUES (@num, @ped, @fecha, @cli, @agencia, @bultos, @peso, @track, @portes, @estado, @obs, @dir, @pob, @cp, @FEntrega, @base, @iva, @total, @vend)"
+                sql = "INSERT INTO Albaranes (NumeroAlbaran, NumeroPedido, Fecha, CodigoCliente, ID_Agencia, ID_FormaPago, NumeroBultos, PesoTotal, CodigoSeguimiento, Portes, Estado, Observaciones, DireccionEnvio, Poblacion, CodigoPostal, FechaEntrega, BaseImponible, ImporteIVA, Total, ID_Vendedor) " &
+                  "VALUES (@num, @ped, @fecha, @cli, @agencia, @formaPago, @bultos, @peso, @track, @portes, @estado, @obs, @dir, @pob, @cp, @FEntrega, @base, @iva, @total, @vend)"
             Else
-                sql = "UPDATE Albaranes SET NumeroPedido=@ped, Fecha=@fecha, CodigoCliente=@cli, ID_Agencia=@agencia, NumeroBultos=@bultos, PesoTotal=@peso, CodigoSeguimiento=@track, Portes=@portes, Estado=@estado, Observaciones=@obs, DireccionEnvio=@dir, FechaEntrega=@FEntrega, Poblacion=@pob, CodigoPostal=@cp, BaseImponible=@base, ImporteIVA=@iva, Total=@total, ID_Vendedor=@vend WHERE NumeroAlbaran=@num"
+                sql = "UPDATE Albaranes SET NumeroPedido=@ped, Fecha=@fecha, CodigoCliente=@cli, ID_Agencia=@agencia, ID_FormaPago=@formaPago, NumeroBultos=@bultos, PesoTotal=@peso, CodigoSeguimiento=@track, Portes=@portes, Estado=@estado, Observaciones=@obs, DireccionEnvio=@dir, FechaEntrega=@FEntrega, Poblacion=@pob, CodigoPostal=@cp, BaseImponible=@base, ImporteIVA=@iva, Total=@total, ID_Vendedor=@vend WHERE NumeroAlbaran=@num"
             End If
 
             Dim fechaAlbaran As DateTime = DateTime.Now
@@ -438,20 +385,21 @@ Public Class FrmAlbaranes
                 cmd.Transaction = trans
                 cmd.Parameters.AddWithValue("@num", _numeroAlbaranActual)
 
-                Dim ped As Object = If(TextBoxPedidoOrigen.Tag IsNot Nothing, TextBoxPedidoOrigen.Tag, DBNull.Value)
+                Dim ped As Object = If(TextBoxPedidoOrigen.Tag IsNot Nothing AndAlso TextBoxPedidoOrigen.Tag.ToString() <> "", TextBoxPedidoOrigen.Tag, DBNull.Value)
                 cmd.Parameters.AddWithValue("@ped", ped)
-                cmd.Parameters.AddWithValue("@fecha", fechaAlbaran)
+                cmd.Parameters.AddWithValue("@fecha", fechaAlbaran.ToString("yyyy-MM-dd HH:mm:ss"))
                 cmd.Parameters.AddWithValue("@cli", TextBoxIdCliente.Text)
 
-                cmd.Parameters.AddWithValue("@agencia", cboAgencias.SelectedValue)
+                cmd.Parameters.AddWithValue("@agencia", idAgencia)
+                cmd.Parameters.AddWithValue("@formaPago", idFormaPago)
                 cmd.Parameters.AddWithValue("@bultos", If(IsNumeric(TextBoxBultos.Text), TextBoxBultos.Text, 1))
                 cmd.Parameters.AddWithValue("@peso", If(IsNumeric(TextBoxPeso.Text), TextBoxPeso.Text, 0))
                 cmd.Parameters.AddWithValue("@track", TextBoxTracking.Text)
                 cmd.Parameters.AddWithValue("@portes", ComboBoxPortes.Text)
-                cmd.Parameters.AddWithValue("@vend", TextBoxIdVendedor.Text)
+                cmd.Parameters.AddWithValue("@vend", idVend)
                 cmd.Parameters.AddWithValue("@estado", cboEstado.Text)
                 cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text)
-                cmd.Parameters.AddWithValue("@FEntrega", DateTimePickerFecha.Value)
+                cmd.Parameters.AddWithValue("@FEntrega", DateTimePickerFecha.Value.ToString("yyyy-MM-dd HH:mm:ss"))
                 cmd.Parameters.AddWithValue("@dir", TextBoxDireccion.Text)
                 cmd.Parameters.AddWithValue("@pob", TextBoxPoblacion.Text)
                 cmd.Parameters.AddWithValue("@cp", TextBoxCP.Text)
@@ -497,6 +445,8 @@ Public Class FrmAlbaranes
                     Dim idArt As Object = If(IsNumeric(r("ID_Articulo")) AndAlso Val(r("ID_Articulo")) > 0, r("ID_Articulo"), DBNull.Value)
 
                     If IsDBNull(idLin) OrElse Not IsNumeric(idLin) Then
+                        ' NUEVO: Capturamos el ID de la línea del pedido si existe
+
                         Dim sqlIns As String = "INSERT INTO LineasAlbaran (NumeroAlbaran, NumeroOrden, ID_Articulo, Descripcion, CantidadServida, PrecioUnitario, Descuento, PorcentajeIVA, Total) VALUES (@alb, @ord, @art, @desc, @cant, @prec, @dcto, @iva, @tot)"
                         Using cmdL As New SQLiteCommand(sqlIns, c)
                             cmdL.Transaction = trans
@@ -1222,6 +1172,16 @@ Public Class FrmAlbaranes
             cmdMov.Parameters.AddWithValue("@stockRes", nuevoStock)
             cmdMov.Parameters.AddWithValue("@doc", albaran)
             cmdMov.ExecuteNonQuery()
+        End Using
+    End Sub
+
+    Private Sub btnImportarPedido_Click_1(sender As Object, e As EventArgs) Handles btnImportarPedido.Click
+        Using frm As New FrmBuscador
+            frm.TablaABuscar = "Pedidos"
+            If frm.ShowDialog = DialogResult.OK Then
+                Dim numPedido = frm.Resultado
+                If Not String.IsNullOrEmpty(numPedido) Then ImportarDatosPedido(numPedido)
+            End If
         End Using
     End Sub
 End Class

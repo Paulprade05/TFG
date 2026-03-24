@@ -42,12 +42,19 @@ Public Class FrmDashboard
     End Sub
 
     Private Sub CargarTarjetas(contenedor As FlowLayoutPanel)
-        ' (Aquí va la lógica de las consultas SQL que ya teníamos para los 0,00€)
-        ' He simplificado para centrarnos en la gráfica, pero mantén tus cmd1, cmd2, etc.
-        ' Por ejemplo:
-        contenedor.Controls.Add(CrearTarjeta("Ventas Año", GetTotalAño().ToString("C2"), Color.FromArgb(0, 150, 255)))
-        contenedor.Controls.Add(CrearTarjeta("Pendiente", GetTotalEstado("Pendiente").ToString("C2"), Color.FromArgb(230, 120, 20)))
-        contenedor.Controls.Add(CrearTarjeta("Vencido", GetTotalEstado("Vencida").ToString("C2"), Color.FromArgb(209, 52, 56)))
+        ' Recuperamos los 5 datos clave
+        Dim vAnio = GetTotalAño()
+        Dim vPendiente = GetTotalEstado("Pendiente")
+        Dim vVencido = GetTotalEstado("Vencida")
+        Dim nClientes = GetConteoTabla("Clientes")
+        Dim nSinStock = GetConteoTabla("Articulos", "WHERE StockActual <= 0")
+
+        ' Añadimos las 5 tarjetas al panel
+        contenedor.Controls.Add(CrearTarjeta("Ventas " & DateTime.Now.Year, vAnio.ToString("C2"), Color.FromArgb(0, 150, 255)))
+        contenedor.Controls.Add(CrearTarjeta("Pendiente", vPendiente.ToString("C2"), Color.FromArgb(230, 120, 20)))
+        contenedor.Controls.Add(CrearTarjeta("Vencido", vVencido.ToString("C2"), Color.FromArgb(209, 52, 56)))
+        contenedor.Controls.Add(CrearTarjeta("Clientes", nClientes.ToString(), Color.FromArgb(40, 140, 90)))
+        contenedor.Controls.Add(CrearTarjeta("Sin Stock", nSinStock.ToString(), Color.FromArgb(255, 193, 7)))
     End Sub
 
     Private Sub ConfigurarGraficaInteractiva(contenedor As Panel)
@@ -60,7 +67,7 @@ Public Class FrmDashboard
         area.AxisX.LabelStyle.ForeColor = Color.WhiteSmoke
         area.AxisX.LineColor = Color.Gray
         area.AxisX.MajorGrid.LineColor = Color.FromArgb(60, 60, 60)
-
+        area.AxisX.Interval = 1
         area.AxisY.LabelStyle.ForeColor = Color.WhiteSmoke
         area.AxisY.LineColor = Color.Gray
         area.AxisY.MajorGrid.LineColor = Color.FromArgb(60, 60, 60)
@@ -69,40 +76,39 @@ Public Class FrmDashboard
         chartVentas.ChartAreas.Clear()
         chartVentas.ChartAreas.Add(area)
 
-        ' Serie de Datos (Barras modernas)
         Dim serie As New Series("Ventas")
         serie.ChartType = SeriesChartType.Column
         serie.Color = Color.FromArgb(0, 150, 255)
-        serie.BorderRadius = 5
-        ' INTERACTIVIDAD: Al pasar el ratón muestra el valor
         serie.ToolTip = "Total: #VALY{C2}"
-
         chartVentas.Series.Clear()
         chartVentas.Series.Add(serie)
 
-        ' --- SQL PARA SACAR VENTAS POR MES ---
+        ' --- LÓGICA PARA PINTAR LOS 12 MESES ---
+        Dim ventasPorMes As New Dictionary(Of Integer, Decimal)
+        For i As Integer = 1 To 12 : ventasPorMes.Add(i, 0) : Next ' Inicializamos todo el año a 0
+
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
-
-            ' Consulta que agrupa por mes (strftime saca 01, 02, etc)
             Dim sql = "SELECT strftime('%m', Fecha) as Mes, SUM(TotalFactura) as Total " &
-                      "FROM Facturas WHERE Fecha LIKE @año AND Estado <> 'Cancelada' " &
-                      "GROUP BY Mes ORDER BY Mes ASC"
+                      "FROM FacturasVenta WHERE Fecha LIKE @anio AND Estado <> 'Cancelada' GROUP BY Mes"
 
             Using cmd As New SQLiteCommand(sql, c)
-                cmd.Parameters.AddWithValue("@año", DateTime.Now.Year.ToString() & "-%")
+                cmd.Parameters.AddWithValue("@anio", DateTime.Now.Year.ToString() & "-%")
                 Using r = cmd.ExecuteReader()
-                    Dim meses() As String = {"", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"}
                     While r.Read()
-                        Dim nMes As Integer = Convert.ToInt32(r("Mes"))
-                        Dim total As Decimal = Convert.ToDecimal(r("Total"))
-                        serie.Points.AddXY(meses(nMes), total)
+                        Dim m As Integer = Convert.ToInt32(r("Mes"))
+                        ventasPorMes(m) = Convert.ToDecimal(r("Total"))
                     End While
                 End Using
             End Using
-        Catch
-        End Try
+        Catch : End Try
+
+        ' Dibujamos los 12 puntos en el gráfico
+        Dim nombresMeses() As String = {"", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"}
+        For i As Integer = 1 To 12
+            serie.Points.AddXY(nombresMeses(i), ventasPorMes(i))
+        Next
 
         contenedor.Controls.Add(chartVentas)
     End Sub
@@ -111,7 +117,7 @@ Public Class FrmDashboard
     Private Function GetTotalAño() As Decimal
         Try
             Dim c = ConexionBD.GetConnection()
-            Dim cmd As New SQLiteCommand("SELECT SUM(TotalFactura) FROM Facturas WHERE Fecha LIKE @anio AND Estado <> 'Cancelada'", c)
+            Dim cmd As New SQLiteCommand("SELECT SUM(TotalFactura) FROM FacturasVenta WHERE Fecha LIKE @anio AND Estado <> 'Cancelada'", c)
             cmd.Parameters.AddWithValue("@anio", DateTime.Now.Year.ToString() & "%")
             Return Convert.ToDecimal(If(cmd.ExecuteScalar(), 0))
         Catch : Return 0 : End Try
@@ -120,7 +126,7 @@ Public Class FrmDashboard
     Private Function GetTotalEstado(estado As String) As Decimal
         Try
             Dim c = ConexionBD.GetConnection()
-            Dim cmd As New SQLiteCommand("SELECT SUM(TotalFactura) FROM Facturas WHERE Estado = @est", c)
+            Dim cmd As New SQLiteCommand("SELECT SUM(TotalFactura) FROM FacturasVenta WHERE Estado = @est", c)
             cmd.Parameters.AddWithValue("@est", estado)
             Return Convert.ToDecimal(If(cmd.ExecuteScalar(), 0))
         Catch : Return 0 : End Try
@@ -131,7 +137,41 @@ Public Class FrmDashboard
         Dim pBorde As New Panel With {.Height = 4, .Dock = DockStyle.Top, .BackColor = colorAcento}
         Dim lTit As New Label With {.Text = titulo, .Location = New Point(10, 20), .ForeColor = Color.Gray, .Font = New Font("Segoe UI", 8, FontStyle.Bold), .AutoSize = True}
         Dim lVal As New Label With {.Text = valor, .Location = New Point(10, 45), .ForeColor = colorAcento, .Font = New Font("Segoe UI", 16, FontStyle.Bold), .AutoSize = True}
+        ' --- NUEVO: ASIGNAR EVENTO SI ES LA TARJETA DE STOCK ---
+        If titulo.Contains("Sin Stock") Then
+            ' Le damos el nombre para identificarla luego
+            pnl.Name = "CardStock"
+            lTit.Name = "CardStock"
+            lVal.Name = "CardStock"
+
+            ' Añadimos el evento a los tres (Panel, Titulo y Valor) para que de igual donde pinches
+            AddHandler pnl.Click, AddressOf TarjetaStock_Click
+            AddHandler lTit.Click, AddressOf TarjetaStock_Click
+            AddHandler lVal.Click, AddressOf TarjetaStock_Click
+        End If
+
         pnl.Controls.AddRange({pBorde, lTit, lVal})
         Return pnl
+
+    End Function
+    ' El evento que salta al pinchar
+    Private Sub TarjetaStock_Click(sender As Object, e As EventArgs)
+        ' Buscamos la instancia de la PagHome (que es el padre de este Dashboard)
+        Dim home = DirectCast(Me.ParentForm, PagHome)
+
+        ' Creamos el formulario de artículos pero con un "truco": le pasamos un parámetro
+        Dim frm As New frmArticulos(soloSinStock:=True)
+
+        ' Usamos tu método de la PagHome para abrirlo
+        home.AbrirFormulario(frm)
+    End Sub
+    ' --- FUNCIÓN AUXILIAR PARA CONTAR (Añade esta también) ---
+    Private Function GetConteoTabla(tabla As String, Optional filtro As String = "") As Integer
+        Try
+            Dim c = ConexionBD.GetConnection()
+            Dim cmd As New SQLiteCommand($"SELECT COUNT(*) FROM {tabla} {filtro}", c)
+            Return Convert.ToInt32(cmd.ExecuteScalar())
+        Catch : Return 0 : End Try
+
     End Function
 End Class

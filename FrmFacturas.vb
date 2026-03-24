@@ -12,6 +12,7 @@ Public Class FrmFacturas
     Private lblRuta As New Label() With {.Text = "Ruta Asignada", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
     Private WithEvents cboEstado As New ComboBox()
     Private Sub FrmFacturas_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        Me.SuspendLayout()
         FrmPresupuestos.EstilizarGrid(DataGridView1)
         EstilizarFecha(DateTimePickerFecha)
         If ComboBoxPortes.Items.Count = 0 Then
@@ -50,6 +51,7 @@ Public Class FrmFacturas
         cboEstado.Items.AddRange(New String() {"Pendiente", "Cobrada", "Vencida", "Cancelada"})
         ' --- AÑADE ESTAS DOS LÍNEAS AQUÍ ---
         ReorganizarControlesAutomaticamente()
+        Me.ResumeLayout(True)
     End Sub
     ' =========================================================
     ' 1. CONFIGURACIÓN DE DATOS Y GRID
@@ -927,28 +929,64 @@ Public Class FrmFacturas
         Try
             If c.State <> ConnectionState.Open Then c.Open()
 
-            ' 1. Cargar la cabecera del Albarán
-            Dim sqlCab As String = "SELECT A.*, C.NombreFiscal, V.Nombre AS NombreVend FROM Albaranes A " &
-                                   "LEFT JOIN Clientes C ON A.CodigoCliente=C.CodigoCliente " &
-                                   "LEFT JOIN Vendedores V ON A.ID_Vendedor=V.ID_Vendedor " &
-                                   "WHERE A.NumeroAlbaran= @num"
+            ' 1. Cargar la cabecera del Albarán (NUEVO: Añadido C.CIF para que la factura sea legal)
+            Dim sqlCab As String = "SELECT A.*, C.NombreFiscal, C.CIF, V.Nombre AS NombreVend FROM Albaranes A " &
+                               "LEFT JOIN Clientes C ON A.CodigoCliente=C.CodigoCliente " &
+                               "LEFT JOIN Vendedores V ON A.ID_Vendedor=V.ID_Vendedor " &
+                               "WHERE A.NumeroAlbaran= @num"
+
             Using cmd As New SQLiteCommand(sqlCab, c)
                 cmd.Parameters.AddWithValue("@num", CodigoAlbaran)
                 Using r = cmd.ExecuteReader()
                     If r.Read() Then
                         LimpiarFormulario()
+
+                        ' --- DATOS BÁSICOS Y CLIENTE ---
                         TextBoxIdCliente.Text = r("CodigoCliente").ToString()
                         TextBoxCliente.Text = r("NombreFiscal").ToString()
                         TextBoxIdVendedor.Text = If(IsDBNull(r("ID_Vendedor")), "", r("ID_Vendedor").ToString())
                         TextBoxVendedor.Text = If(IsDBNull(r("NombreVend")), "", r("NombreVend").ToString())
 
-                        If Not IsDBNull(r("FechaEntrega")) Then DateTimePickerFecha.Value = Convert.ToDateTime(r("FechaEntrega"))
+                        ' NUEVO: El CIF es obligatorio en las facturas
+
+                        If Not IsDBNull(r("FechaEntrega")) AndAlso DateTimePickerFecha IsNot Nothing Then
+                            DateTimePickerFecha.Value = Convert.ToDateTime(r("FechaEntrega"))
+                        End If
 
                         TextBoxObservaciones.Text = $"Generado desde Albarán {CodigoAlbaran}."
                         If TextBoxAlbaranOrigen IsNot Nothing Then
                             TextBoxAlbaranOrigen.Text = CodigoAlbaran
                             TextBoxAlbaranOrigen.Tag = CodigoAlbaran
                         End If
+
+                        ' --- NUEVO: DIRECCIÓN Y ENVÍO ---
+                        If TextBoxDireccion IsNot Nothing Then TextBoxDireccion.Text = If(IsDBNull(r("DireccionEnvio")), "", r("DireccionEnvio").ToString())
+                        If TextBoxPoblacion IsNot Nothing Then TextBoxPoblacion.Text = If(IsDBNull(r("Poblacion")), "", r("Poblacion").ToString())
+                        If TextBoxCP IsNot Nothing Then TextBoxCP.Text = If(IsDBNull(r("CodigoPostal")), "", r("CodigoPostal").ToString())
+
+                        ' --- FINANCIERO: FORMA DE PAGO ---
+                        Dim idFPago = r("ID_FormaPago")
+                        If Not IsDBNull(idFPago) AndAlso idFPago IsNot Nothing AndAlso idFPago.ToString() <> "" Then
+                            cboFormaPago.SelectedValue = Convert.ToInt32(idFPago)
+                        Else
+                            cboFormaPago.SelectedIndex = -1
+                        End If
+
+                        ' --- NUEVO: LOGÍSTICA (Bultos, Peso, Agencia, Tracking...) ---
+                        Dim idAgencia = r("ID_Agencia")
+                        If cboAgencias IsNot Nothing Then
+                            If Not IsDBNull(idAgencia) AndAlso idAgencia IsNot Nothing AndAlso idAgencia.ToString() <> "" Then
+                                cboAgencias.SelectedValue = Convert.ToInt32(idAgencia)
+                            Else
+                                cboAgencias.SelectedIndex = -1
+                            End If
+                        End If
+
+                        If TextBoxBultos IsNot Nothing Then TextBoxBultos.Text = If(IsDBNull(r("NumeroBultos")), "1", r("NumeroBultos").ToString())
+                        If TextBoxPeso IsNot Nothing Then TextBoxPeso.Text = If(IsDBNull(r("PesoTotal")), "0", r("PesoTotal").ToString())
+                        If TextBoxTracking IsNot Nothing Then TextBoxTracking.Text = If(IsDBNull(r("CodigoSeguimiento")), "", r("CodigoSeguimiento").ToString())
+                        If ComboBoxPortes IsNot Nothing Then ComboBoxPortes.Text = If(IsDBNull(r("Portes")), "Pagados", r("Portes").ToString())
+
                     Else
                         MessageBox.Show("Albarán no encontrado en la base de datos.")
                         Return
@@ -1011,7 +1049,7 @@ Public Class FrmFacturas
 
             ' Calculamos los totales finales de la pantalla
             CalcularTotalesGenerales()
-            MessageBox.Show("Albarán importado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            MessageBox.Show("Albarán y datos logísticos importados correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
 
         Catch ex As Exception
             MessageBox.Show("Error al importar: " & ex.Message)

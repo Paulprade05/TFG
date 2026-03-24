@@ -27,11 +27,19 @@ Public Class FrmArticulos
     Private WithEvents btnNuevo As New Button()
 
     Private WithEvents dgvArticulos As New DataGridView()
-
     Private _idArticuloActual As Integer = 0
+    Private _filtrarSinStockAlAbrir As Boolean = False
 
     ' =========================================================
-    ' 2. INICIALIZACIÓN
+    ' NUEVO CONSTRUCTOR: Recibe la orden del Dashboard
+    ' =========================================================
+    Public Sub New(Optional soloSinStock As Boolean = False)
+        InitializeComponent()
+        _filtrarSinStockAlAbrir = soloSinStock
+    End Sub
+
+    ' =========================================================
+    ' 2. INICIALIZACIÓN (UNIFICADA)
     ' =========================================================
     Private Sub FrmArticulos_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.Text = "Gestión de Artículos"
@@ -40,11 +48,16 @@ Public Class FrmArticulos
 
         ConstruirInterfaz()
         ConfigurarGrid()
-
         CargarDesplegables()
-        CargarArticulos()
-    End Sub
 
+        ' Aquí decidimos qué cargar dependiendo de si venimos del Dashboard o no
+        If _filtrarSinStockAlAbrir Then
+            ' Columna StockActual es la que tienes en la base de datos
+            CargarArticulos("WHERE StockActual <= 0")
+        Else
+            CargarArticulos()
+        End If
+    End Sub
     ' =========================================================
     ' 3. CONSTRUCTOR DE LA INTERFAZ (Bloque compacto y ordenado)
     ' =========================================================
@@ -216,12 +229,15 @@ Public Class FrmArticulos
     ' =========================================================
 
 
-    Private Sub CargarArticulos()
+    ' Ahora admite un filtro opcional
+    Private Sub CargarArticulos(Optional filtroSQL As String = "")
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
 
-            Dim sql As String = "SELECT * FROM Articulos ORDER BY ID_Articulo ASC"
+            ' Si pasamos un filtro (ej: WHERE StockActual <= 0), se lo añade a la consulta
+            Dim sql As String = "SELECT * FROM Articulos " & filtroSQL & " ORDER BY ID_Articulo ASC"
+
             Using da As New SQLiteDataAdapter(sql, c)
                 Dim dt As New DataTable()
                 da.Fill(dt)
