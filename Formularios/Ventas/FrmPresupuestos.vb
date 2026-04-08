@@ -23,19 +23,7 @@ Public Class FrmPresupuestos
 
         ConfigurarDiseñoResponsive()
         EstilizarGrid(DataGridView1)
-        ' CONFIGURACIÓN DEL BOTÓN IMPRIMIR
-        ' (Ajusta la posición X e Y según dónde tengas tus otros botones)
-        btnImprimir.Text = "Exportar PDF"
-        btnImprimir.Bounds = New Rectangle(400, Me.ClientSize.Height - 60, 120, 35) ' Ponlo al lado de "Nuevo"
-        btnImprimir.BackColor = Color.FromArgb(40, 140, 90) ' Verde corporativo
-        btnImprimir.ForeColor = Color.White
-        btnImprimir.FlatStyle = FlatStyle.Flat
-        btnImprimir.FlatAppearance.BorderSize = 0
-        btnImprimir.Font = New Font("Segoe UI", 10, FontStyle.Bold)
-        btnImprimir.Cursor = Cursors.Hand
-        ' IMPORTANTE: Asegúrate de añadirlo al contenedor correcto (Me.Controls o el Panel inferior)
-        Me.Controls.Add(btnImprimir)
-        btnImprimir.BringToFront()
+
         Me.Controls.Add(lblFormaPago) : Me.Controls.Add(cboFormaPago)
         'Me.Controls.Add(lblRuta) : Me.Controls.Add(cboRuta)
         cboFormaPago.DropDownStyle = ComboBoxStyle.DropDownList
@@ -47,7 +35,24 @@ Public Class FrmPresupuestos
         cboEstado.Items.AddRange(New String() {"Pendiente", "Aceptado", "Rechazado", "Convertido"})
         ReorganizarControlesAutomaticamente()
         ConfigurarColumnasGrid()
+        ' CONFIGURACIÓN DEL BOTÓN IMPRIMIR
+        btnImprimir.Text = "Exportar PDF"
 
+        ' 1. Le damos el tamaño
+        btnImprimir.Size = New Size(120, 35)
+
+        ' 2. TRUCO: Lo anclamos debajo del botón Guardar automáticamente
+        ' OJO: Si tu botón de guardar no se llama "ButtonGuardar", cambia el nombre en esta línea
+        btnImprimir.Location = New Point(ButtonGuardar.Location.X, ButtonGuardar.Location.Y + ButtonGuardar.Height + 10)
+
+        btnImprimir.BackColor = Color.FromArgb(40, 140, 90) ' Verde corporativo
+        btnImprimir.ForeColor = Color.White
+        btnImprimir.FlatStyle = FlatStyle.Flat
+        btnImprimir.FlatAppearance.BorderSize = 0
+        btnImprimir.Font = New Font("Segoe UI", 10, FontStyle.Bold)
+        btnImprimir.Cursor = Cursors.Hand
+        Me.Controls.Add(btnImprimir)
+        btnImprimir.BringToFront()
         Dim ultimoNum As String = ObtenerUltimoNumeroPresupuesto()
         If Not String.IsNullOrEmpty(ultimoNum) Then
             CargarPresupuesto(ultimoNum)
@@ -825,7 +830,7 @@ Public Class FrmPresupuestos
         Dim fTituloDoc As New Font("Segoe UI", 24, FontStyle.Bold)
         Dim fEmpresa As New Font("Segoe UI", 14, FontStyle.Bold)
         Dim fCabecera As New Font("Segoe UI", 10, FontStyle.Bold)
-        Dim fClienteNombre As New Font("Segoe UI", 12, FontStyle.Bold) ' <--- Nombre del cliente más grande
+        Dim fClienteNombre As New Font("Segoe UI", 12, FontStyle.Bold)
         Dim fNormal As New Font("Segoe UI", 10, FontStyle.Regular)
         Dim fFila As New Font("Segoe UI", 9, FontStyle.Regular)
         Dim fTotalGordo As New Font("Segoe UI", 14, FontStyle.Bold)
@@ -880,7 +885,7 @@ Public Class FrmPresupuestos
             Catch ex As Exception
             End Try
 
-            ' DIBUJAR DATOS DE EMPRESA Y DOCUMENTO
+            ' DIBUJAR DATOS DE EMPRESA 
             g.DrawString(empNombre, fEmpresa, bAzulCorporativo, margenIzq, yPos)
             g.DrawString("CIF: " & empCIF, fNormal, bGrisOscuro, margenIzq, yPos + 25)
 
@@ -889,16 +894,23 @@ Public Class FrmPresupuestos
             If empTelefono <> "" Then bloqueContacto &= vbCrLf & "Tlf: " & empTelefono
             g.DrawString(bloqueContacto, fNormal, bGrisOscuro, margenIzq, yPos + 45)
 
+            ' -----------------------------------------------------------
+            ' NUEVO: B) DATOS DEL DOCUMENTO (PRESUPUESTO)
+            ' -----------------------------------------------------------
             g.DrawString("PRESUPUESTO", fTituloDoc, bAzulCorporativo, margenDer, yPos, formatoDerecha)
             g.DrawString("Nº Documento: " & TextBoxPresupuesto.Text, fCabecera, bNegro, margenDer, yPos + 40, formatoDerecha)
             g.DrawString("Fecha: " & TextBoxFecha.Text, fNormal, bGrisOscuro, margenDer, yPos + 60, formatoDerecha)
 
-            yPos += 110
+            ' Trazabilidad y Comercial
+            g.DrawString("Comercial: " & TextBoxVendedor.Text, fNormal, bGrisOscuro, margenDer, yPos + 85, formatoDerecha)
+            g.DrawString("Validez de la oferta: 30 días", fNormal, bGrisOscuro, margenDer, yPos + 105, formatoDerecha)
+
+            yPos += 130
             g.DrawLine(lapizGrueso, margenIzq, yPos, margenDer, yPos)
             yPos += 20
 
             ' -----------------------------------------------------------
-            ' B) LEER DATOS DEL CLIENTE (BD)
+            ' C) LEER DATOS DEL CLIENTE (BD)
             ' -----------------------------------------------------------
             Dim cliNombre As String = TextBoxCliente.Text
             Dim cliCIF As String = "", cliDireccion As String = "", cliPoblacion As String = "", cliContacto As String = ""
@@ -928,44 +940,25 @@ Public Class FrmPresupuestos
             Catch ex As Exception
             End Try
 
-            ' -----------------------------------------------------------
-            ' C) DIBUJAR CAJA DEL CLIENTE (MÁS ALTA)
-            ' -----------------------------------------------------------
-            ' Aumentamos la altura a 145 para que quepa todo perfecto
+            ' DIBUJAR CAJA DEL CLIENTE 
             g.FillRectangle(bGrisClaro, margenIzq, yPos, anchoPagina, 145)
             g.DrawRectangle(lapizFino, margenIzq, yPos, anchoPagina, 145)
 
-            ' Etiqueta superior
             g.DrawString("DATOS DEL CLIENTE:", fCabecera, bAzulCorporativo, margenIzq + 15, yPos + 10)
-
-            ' Nombre Grande y Negrita
             g.DrawString(cliNombre, fClienteNombre, bNegro, margenIzq + 15, yPos + 35)
 
-            ' Resto de datos con espaciado cómodo
             Dim xDatos As Integer = margenIzq + 15
-            Dim yDatos As Integer = yPos + 62 ' Espacio prudencial debajo del nombre
+            Dim yDatos As Integer = yPos + 62
             Dim interlineado As Integer = 18
 
-            If cliCIF <> "" Then
-                g.DrawString(cliCIF, fNormal, bGrisOscuro, xDatos, yDatos)
-                yDatos += interlineado
-            End If
-            If cliDireccion <> "" Then
-                g.DrawString(cliDireccion, fNormal, bGrisOscuro, xDatos, yDatos)
-                yDatos += interlineado
-            End If
-            If cliPoblacion <> "" Then
-                g.DrawString(cliPoblacion, fNormal, bGrisOscuro, xDatos, yDatos)
-                yDatos += interlineado
-            End If
-            If cliContacto <> "" Then
-                g.DrawString(cliContacto, fNormal, bGrisOscuro, xDatos, yDatos)
-            End If
+            If cliCIF <> "" Then g.DrawString(cliCIF, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If cliDireccion <> "" Then g.DrawString(cliDireccion, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If cliPoblacion <> "" Then g.DrawString(cliPoblacion, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If cliContacto <> "" Then g.DrawString(cliContacto, fNormal, bGrisOscuro, xDatos, yDatos)
 
-            ' Empujamos el cursor más abajo (165) para que la tabla empiece a una distancia segura
             yPos += 165
         Else
-            yPos += 30 ' Margen superior para las hojas 2, 3...
+            yPos += 30
         End If
 
         ' ===========================================================
@@ -1023,7 +1016,7 @@ Public Class FrmPresupuestos
         End While
 
         ' ===========================================================
-        ' 4. TOTALES (DISEÑO LIMPIO Y ALINEADO)
+        ' 4. TOTALES Y CONDICIONES (PIE DE PÁGINA)
         ' ===========================================================
         If _filaActualImpresion >= DataGridView1.Rows.Count Then
             yPos += 20
@@ -1035,6 +1028,28 @@ Public Class FrmPresupuestos
             Dim anchoCajaTotales As Integer = 300
             Dim xCaja As Integer = margenDer - anchoCajaTotales
 
+            ' -----------------------------------------------------------
+            ' NUEVO: CONDICIONES Y OBSERVACIONES (Abajo a la izquierda)
+            ' -----------------------------------------------------------
+            Dim yNotas As Integer = yPos
+
+            ' Forma de Pago propuesta
+            If cboFormaPago.Text <> "" Then
+                g.DrawString("Forma de pago propuesta:", fCabecera, bAzulCorporativo, margenIzq, yNotas)
+                g.DrawString(cboFormaPago.Text, fNormal, bNegro, margenIzq + 185, yNotas)
+                yNotas += 35
+            End If
+
+            ' Observaciones del presupuesto
+            If TextBoxObservaciones.Text.Trim() <> "" Then
+                g.DrawString("Condiciones y Observaciones:", fCabecera, bAzulCorporativo, margenIzq, yNotas)
+                Dim rectObs As New Rectangle(margenIzq, yNotas + 20, anchoCajaTotales - 20, 80)
+                g.DrawString(TextBoxObservaciones.Text, fNormal, bGrisOscuro, rectObs)
+            End If
+
+            ' -----------------------------------------------------------
+            ' DIBUJAR TOTALES (Abajo a la derecha)
+            ' -----------------------------------------------------------
             g.DrawString("Base Imponible:", fNormal, bGrisOscuro, xCaja, yPos)
             g.DrawString(totalBase, fNormal, bNegro, margenDer, yPos, formatoDerecha)
             yPos += 25

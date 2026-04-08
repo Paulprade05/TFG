@@ -6,7 +6,10 @@ Public Class FrmAlbaranes
     Private _numeroAlbaranActual As String = ""
     Private _dtLineas As DataTable
     Private _idsParaBorrar As New List(Of Integer)
-
+    ' --- MOTOR DE IMPRESIÓN DEL DOCUMENTO ---
+    Private WithEvents btnImprimir As New Button()
+    Private WithEvents docImprimir As New Printing.PrintDocument()
+    Private _filaActualImpresion As Integer = 0
     ' --- NUEVOS DESPLEGABLES ---
     Private WithEvents cboFormaPago As New ComboBox()
     Private WithEvents cboRuta As New ComboBox()
@@ -40,6 +43,10 @@ Public Class FrmAlbaranes
         Me.Controls.Add(lblRuta) : Me.Controls.Add(cboRuta)
         cboFormaPago.DropDownStyle = ComboBoxStyle.DropDownList
         cboRuta.DropDownStyle = ComboBoxStyle.DropDownList
+        Me.Controls.Add(cboEstado)
+        cboEstado.DropDownStyle = ComboBoxStyle.DropDownList
+        cboEstado.Items.Clear()
+        cboEstado.Items.AddRange(New String() {"Pendiente", "Entregado", "Facturado"})
         CargarDesplegables()
 
         Dim ultimoNum As String = ObtenerUltimoNumeroAlbaran()
@@ -56,11 +63,9 @@ Public Class FrmAlbaranes
         If TextBox5 IsNot Nothing Then TextBox5.Visible = False
         If Button4 IsNot Nothing Then Button4.Visible = False
         If Label23 IsNot Nothing Then Label23.Visible = False
-        Me.Controls.Add(cboEstado)
-        cboEstado.DropDownStyle = ComboBoxStyle.DropDownList
-        cboEstado.Items.Clear()
-        cboEstado.Items.AddRange(New String() {"Pendiente", "Entregado", "Facturado"})
+
         ReorganizarControlesAutomaticamente()
+
         Me.ResumeLayout(True)
     End Sub
 
@@ -530,7 +535,23 @@ Public Class FrmAlbaranes
                         TextBoxAlbaran.Text = reader("NumeroAlbaran").ToString()
                         If Not IsDBNull(reader("Fecha")) Then TextBoxFecha.Text = Convert.ToDateTime(reader("Fecha")).ToShortDateString()
                         TextBoxObservaciones.Text = If(IsDBNull(reader("Observaciones")), "", reader("Observaciones").ToString())
-                        cboEstado.Text = If(IsDBNull(reader("Estado")), "Pendiente", reader("Estado").ToString())
+                        ' --- ESTADO (A prueba de mayúsculas/minúsculas) ---
+                        Dim estadoDB As String = If(IsDBNull(reader("Estado")), "Pendiente", reader("Estado").ToString().Trim())
+
+                        ' Buscamos en la lista ignorando mayúsculas y minúsculas
+                        Dim encontrado As Boolean = False
+                        For Each item As String In cboEstado.Items
+                            If item.Equals(estadoDB, StringComparison.OrdinalIgnoreCase) Then
+                                cboEstado.SelectedItem = item
+                                encontrado = True
+                                Exit For
+                            End If
+                        Next
+
+                        ' Si después de buscar no encontró nada que se parezca, ponemos Pendiente
+                        If Not encontrado Then
+                            If cboEstado.Items.Count > 0 Then cboEstado.SelectedIndex = 0
+                        End If
 
                         TextBoxIdCliente.Text = reader("CodigoCliente").ToString()
                         TextBoxCliente.Text = If(IsDBNull(reader("NombreCliente")), "", reader("NombreCliente").ToString())
@@ -538,7 +559,19 @@ Public Class FrmAlbaranes
                         TextBoxDireccion.Text = reader("DireccionEnvio").ToString()
                         TextBoxPoblacion.Text = reader("Poblacion").ToString()
                         TextBoxCP.Text = reader("CodigoPostal").ToString()
+                        ' --- FORMA DE PAGO ---
+                        If Not IsDBNull(reader("ID_FormaPago")) Then
+                            cboFormaPago.SelectedValue = Convert.ToInt32(reader("ID_FormaPago"))
+                        Else
+                            cboFormaPago.SelectedIndex = -1
+                        End If
 
+                        ' --- RUTA ASIGNADA ---
+                        If Not IsDBNull(reader("ID_Ruta")) Then
+                            cboRuta.SelectedValue = Convert.ToInt32(reader("ID_Ruta"))
+                        Else
+                            cboRuta.SelectedIndex = -1
+                        End If
                         TextBoxIdVendedor.Text = If(IsDBNull(reader("ID_Vendedor")), "", reader("ID_Vendedor").ToString())
                         TextBoxVendedor.Text = If(IsDBNull(reader("NombreVendedor")), "", reader("NombreVendedor").ToString())
 
@@ -1037,6 +1070,25 @@ Public Class FrmAlbaranes
         EstilizarBoton(ButtonBorrar, margenIzq + 115, yBotones, Color.FromArgb(209, 52, 56), Color.White)
         If ButtonNuevoPed IsNot Nothing Then EstilizarBoton(ButtonNuevoPed, margenIzq + 230, yBotones, Color.FromArgb(0, 120, 215), Color.White)
 
+        ' ==========================================================
+        ' AQUÍ INTEGRAMOS EL BOTÓN DE EXPORTAR PDF
+        ' ==========================================================
+        If btnImprimir.Parent Is Nothing Then
+            btnImprimir.Text = "Exportar PDF"
+            btnImprimir.Size = New Size(120, 35)
+            btnImprimir.BackColor = Color.FromArgb(40, 140, 90)
+            btnImprimir.ForeColor = Color.White
+            btnImprimir.FlatStyle = FlatStyle.Flat
+            btnImprimir.FlatAppearance.BorderSize = 0
+            btnImprimir.Font = New Font("Segoe UI", 10, FontStyle.Bold)
+            btnImprimir.Cursor = Cursors.Hand
+            Me.Controls.Add(btnImprimir)
+        End If
+        ' Lo colocamos exactamente debajo del botón Guardar (+ 40 píxeles)
+        btnImprimir.Location = New Point(margenIzq, yBotones + 40)
+        btnImprimir.BringToFront()
+        ' ==========================================================
+
         EstilizarBoton(ButtonBorrarLineas, margenIzq + 380, yBotones, Color.FromArgb(85, 85, 85), Color.White)
         If ButtonBorrarLineas IsNot Nothing Then ButtonBorrarLineas.Text = "- Quitar Línea" : ButtonBorrarLineas.Width = 110
 
@@ -1052,7 +1104,8 @@ Public Class FrmAlbaranes
         DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
         If TabControlModerno2 IsNot Nothing Then TabControlModerno2.Anchor = AnchorStyles.Top Or AnchorStyles.Right
 
-        Dim anclajeAbajoIzq As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPed, ButtonBorrarLineas, ButtonNuevaLinea, lblStock}
+        ' ¡AQUÍ ESTÁ EL TRUCO! He metido btnImprimir en el array de anclajes
+        Dim anclajeAbajoIzq As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPed, ButtonBorrarLineas, ButtonNuevaLinea, lblStock, btnImprimir}
         For Each c In anclajeAbajoIzq
             If c IsNot Nothing Then c.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
         Next
@@ -1062,6 +1115,7 @@ Public Class FrmAlbaranes
             If c IsNot Nothing Then c.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         Next
     End Sub
+
 
     Private Sub EstilizarBoton(btn As System.Windows.Forms.Button, x As Integer, y As Integer, bg As Color, fg As Color)
         If btn IsNot Nothing Then
@@ -1184,6 +1238,284 @@ Public Class FrmAlbaranes
             End If
         End Using
     End Sub
+    ' =========================================================================
+    ' MOTOR DE EXPORTACIÓN A PDF (ALBARANES)
+    ' =========================================================================
+    Private Sub btnImprimir_Click(sender As Object, e As EventArgs) Handles btnImprimir.Click
+        ' OJO: Cambia TextBoxAlbaran por el nombre real de tu TextBox del ID del albarán
+        If String.IsNullOrWhiteSpace(TextBoxAlbaran.Text) Then
+            MessageBox.Show("No hay ningún documento cargado para imprimir.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
+            Return
+        End If
+
+        docImprimir.DefaultPageSettings.Landscape = False
+        docImprimir.DefaultPageSettings.PaperSize = New Printing.PaperSize("A4", 827, 1169)
+        docImprimir.DocumentName = "Albaran_" & TextBoxAlbaran.Text
+
+        Dim ppd As New PrintPreviewDialog()
+        ppd.Document = docImprimir
+        ppd.Width = 900 : ppd.Height = 700
+        CType(ppd, Form).WindowState = FormWindowState.Maximized
+        ppd.ShowDialog()
+    End Sub
+
+    Private Sub docImprimir_BeginPrint(sender As Object, e As Printing.PrintEventArgs) Handles docImprimir.BeginPrint
+        _filaActualImpresion = 0
+    End Sub
+
+    Private Sub docImprimir_PrintPage(sender As Object, e As Printing.PrintPageEventArgs) Handles docImprimir.PrintPage
+        Dim g As Graphics = e.Graphics
+
+        ' --- FUENTES PROFESIONALES ---
+        Dim fTituloDoc As New Font("Segoe UI", 24, FontStyle.Bold)
+        Dim fEmpresa As New Font("Segoe UI", 14, FontStyle.Bold)
+        Dim fCabecera As New Font("Segoe UI", 10, FontStyle.Bold)
+        Dim fClienteNombre As New Font("Segoe UI", 12, FontStyle.Bold)
+        Dim fNormal As New Font("Segoe UI", 10, FontStyle.Regular)
+        Dim fFila As New Font("Segoe UI", 9, FontStyle.Regular)
+        Dim fTotalGordo As New Font("Segoe UI", 14, FontStyle.Bold)
+
+        ' --- COLORES Y PINCELES ---
+        Dim bNegro As New SolidBrush(Color.Black)
+        Dim bGrisOscuro As New SolidBrush(Color.FromArgb(70, 75, 80))
+        Dim bAzulCorporativo As New SolidBrush(Color.FromArgb(40, 50, 70))
+        Dim bBlanco As New SolidBrush(Color.White)
+        Dim bGrisClaro As New SolidBrush(Color.FromArgb(245, 245, 245))
+
+        Dim lapizFino As New Pen(Color.FromArgb(220, 220, 220), 1)
+        Dim lapizGrueso As New Pen(Color.FromArgb(40, 50, 70), 2)
+
+        Dim margenIzq As Integer = 50
+        Dim margenDer As Integer = 777
+        Dim anchoPagina As Integer = 727
+        Dim yPos As Integer = 50
+
+        Dim formatoIzquierda As New StringFormat() With {.Alignment = StringAlignment.Near, .LineAlignment = StringAlignment.Center}
+        Dim formatoDerecha As New StringFormat() With {.Alignment = StringAlignment.Far, .LineAlignment = StringAlignment.Center}
+        Dim formatoCentro As New StringFormat() With {.Alignment = StringAlignment.Center, .LineAlignment = StringAlignment.Center}
+
+        ' ===========================================================
+        ' 1. CABECERA DEL DOCUMENTO
+        ' ===========================================================
+        If _filaActualImpresion = 0 Then
+            ' A) EMPRESA
+            Dim empNombre As String = "EMPRESA NO CONFIGURADA", empCIF As String = "", empDireccion As String = "", empCP_Pob As String = "", empTelefono As String = ""
+            Try
+                Dim c = ConexionBD.GetConnection()
+                If c.State <> ConnectionState.Open Then c.Open()
+                Dim sql As String = "SELECT NombreFiscal, CIF, Direccion, Poblacion, CodigoPostal, Telefono FROM Empresa LIMIT 1"
+                Using cmd As New SQLiteCommand(sql, c)
+                    Using reader As SQLiteDataReader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            empNombre = If(IsDBNull(reader("NombreFiscal")), "", reader("NombreFiscal").ToString())
+                            empCIF = If(IsDBNull(reader("CIF")), "", reader("CIF").ToString())
+                            empDireccion = If(IsDBNull(reader("Direccion")), "", reader("Direccion").ToString())
+                            Dim cp As String = If(IsDBNull(reader("CodigoPostal")), "", reader("CodigoPostal").ToString())
+                            Dim pob As String = If(IsDBNull(reader("Poblacion")), "", reader("Poblacion").ToString())
+                            empCP_Pob = (cp & " " & pob).Trim()
+                            empTelefono = If(IsDBNull(reader("Telefono")), "", reader("Telefono").ToString())
+                        End If
+                    End Using
+                End Using
+            Catch ex As Exception
+            End Try
+
+            g.DrawString(empNombre, fEmpresa, bAzulCorporativo, margenIzq, yPos)
+            g.DrawString("CIF: " & empCIF, fNormal, bGrisOscuro, margenIzq, yPos + 25)
+            Dim bloqueContacto As String = empDireccion
+            If empCP_Pob <> "" Then bloqueContacto &= vbCrLf & empCP_Pob
+            If empTelefono <> "" Then bloqueContacto &= vbCrLf & "Tlf: " & empTelefono
+            g.DrawString(bloqueContacto, fNormal, bGrisOscuro, margenIzq, yPos + 45)
+
+            ' B) DATOS DEL DOCUMENTO (ALBARÁN)
+            g.DrawString("ALBARÁN", fTituloDoc, bAzulCorporativo, margenDer, yPos, formatoDerecha)
+            g.DrawString("Nº Documento: " & TextBoxAlbaran.Text, fCabecera, bNegro, margenDer, yPos + 40, formatoDerecha)
+            g.DrawString("Fecha: " & TextBoxFecha.Text, fNormal, bGrisOscuro, margenDer, yPos + 60, formatoDerecha)
+
+            ' Trazabilidad: De qué pedido viene
+            If TextBoxPedidoOrigen IsNot Nothing AndAlso TextBoxPedidoOrigen.Text <> "" Then
+                g.DrawString("Pedido Origen: " & TextBoxPedidoOrigen.Text, fNormal, bGrisOscuro, margenDer, yPos + 85, formatoDerecha)
+            End If
+
+            yPos += 110
+            g.DrawLine(lapizGrueso, margenIzq, yPos, margenDer, yPos)
+            yPos += 20
+
+            ' C) CLIENTE
+            Dim cliNombre As String = TextBoxCliente.Text
+            Dim cliCIF As String = "", cliDireccion As String = "", cliPoblacion As String = "", cliContacto As String = ""
+
+            Try
+                Dim c = ConexionBD.GetConnection()
+                If c.State <> ConnectionState.Open Then c.Open()
+                Dim sqlCli As String = "SELECT NombreFiscal, CIF, Direccion, Poblacion, Provincia, Telefono, Email FROM Clientes WHERE NombreFiscal = @filtro OR CodigoCliente = @filtro LIMIT 1"
+                Using cmd As New SQLiteCommand(sqlCli, c)
+                    cmd.Parameters.AddWithValue("@filtro", TextBoxCliente.Text.Trim())
+                    Using reader As SQLiteDataReader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            cliNombre = If(IsDBNull(reader("NombreFiscal")), TextBoxCliente.Text, reader("NombreFiscal").ToString())
+                            cliCIF = If(IsDBNull(reader("CIF")), "", "CIF: " & reader("CIF").ToString())
+                            cliDireccion = If(IsDBNull(reader("Direccion")), "", reader("Direccion").ToString())
+                            Dim pob As String = If(IsDBNull(reader("Poblacion")), "", reader("Poblacion").ToString())
+                            Dim prov As String = If(IsDBNull(reader("Provincia")), "", reader("Provincia").ToString())
+                            cliPoblacion = If(pob <> "" And prov <> "", pob & " (" & prov & ")", pob & prov)
+                            Dim tel As String = If(IsDBNull(reader("Telefono")), "", "Tlf: " & reader("Telefono").ToString())
+                            Dim mail As String = If(IsDBNull(reader("Email")), "", reader("Email").ToString())
+                            cliContacto = If(tel <> "" And mail <> "", tel & " | " & mail, tel & mail)
+                        End If
+                    End Using
+                End Using
+            Catch ex As Exception
+            End Try
+
+            g.FillRectangle(bGrisClaro, margenIzq, yPos, anchoPagina, 145)
+            g.DrawRectangle(lapizFino, margenIzq, yPos, anchoPagina, 145)
+            g.DrawString("DATOS DEL CLIENTE:", fCabecera, bAzulCorporativo, margenIzq + 15, yPos + 10)
+            g.DrawString(cliNombre, fClienteNombre, bNegro, margenIzq + 15, yPos + 35)
+
+            Dim xDatos As Integer = margenIzq + 15
+            Dim yDatos As Integer = yPos + 62
+            Dim interlineado As Integer = 18
+
+            If cliCIF <> "" Then g.DrawString(cliCIF, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If cliDireccion <> "" Then g.DrawString(cliDireccion, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If cliPoblacion <> "" Then g.DrawString(cliPoblacion, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If cliContacto <> "" Then g.DrawString(cliContacto, fNormal, bGrisOscuro, xDatos, yDatos)
+
+            yPos += 165
+        Else
+            yPos += 30
+        End If
+
+        ' ===========================================================
+        ' 2. CABECERA DE LA TABLA
+        ' ===========================================================
+        Dim rectCant As New Rectangle(margenIzq, yPos, 60, 30)
+        Dim rectDesc As New Rectangle(margenIzq + 60, yPos, 340, 30)
+        Dim rectPrecio As New Rectangle(margenIzq + 400, yPos, 110, 30)
+        Dim rectDto As New Rectangle(margenIzq + 510, yPos, 70, 30)
+        Dim rectTotal As New Rectangle(margenIzq + 580, yPos, 147, 30)
+
+        g.FillRectangle(bAzulCorporativo, margenIzq, yPos, anchoPagina, 30)
+
+        ' Ojo: En la cabecera he puesto "Entregado" en vez de "Cant."
+        g.DrawString("Cant.", fCabecera, bBlanco, rectCant, formatoCentro)
+        g.DrawString("Descripción", fCabecera, bBlanco, rectDesc, formatoIzquierda)
+        g.DrawString("Precio", fCabecera, bBlanco, rectPrecio, formatoDerecha)
+        g.DrawString("% Dto", fCabecera, bBlanco, rectDto, formatoDerecha)
+        g.DrawString("Total", fCabecera, bBlanco, rectTotal, formatoDerecha)
+
+        yPos += 35
+
+        ' ===========================================================
+        ' 3. RECORRER LÍNEAS DEL DATAGRIDVIEW
+        ' ===========================================================
+        While _filaActualImpresion < DataGridView1.Rows.Count
+            Dim row As DataGridViewRow = DataGridView1.Rows(_filaActualImpresion)
+            If row.IsNewRow Then Exit While
+
+            rectCant.Y = yPos : rectDesc.Y = yPos : rectPrecio.Y = yPos : rectDto.Y = yPos : rectTotal.Y = yPos
+
+            ' ¡CUIDADO AQUÍ! He cambiado la lectura a la columna "Entregado". 
+            ' Asegúrate de que el Name interno de esa columna es "Entregado"
+            Dim cant As String = If(row.Cells("CantidadServida").Value IsNot Nothing, row.Cells("CantidadServida").Value.ToString(), "0")
+            Dim desc As String = If(row.Cells("Descripcion").Value IsNot Nothing, row.Cells("Descripcion").Value.ToString(), "")
+            Dim precio As String = If(row.Cells("PrecioUnitario").Value IsNot Nothing, Convert.ToDecimal(row.Cells("PrecioUnitario").Value).ToString("N2") & " €", "0,00 €")
+            Dim dto As String = If(row.Cells("Descuento").Value IsNot Nothing, row.Cells("Descuento").Value.ToString() & " %", "0 %")
+            Dim totalLinea As String = If(row.Cells("Total").Value IsNot Nothing, Convert.ToDecimal(row.Cells("Total").Value).ToString("N2") & " €", "0,00 €")
+
+            If desc.Length > 55 Then desc = desc.Substring(0, 52) & "..."
+
+            g.DrawString(cant, fFila, bNegro, rectCant, formatoCentro)
+            g.DrawString(desc, fFila, bNegro, rectDesc, formatoIzquierda)
+            g.DrawString(precio, fFila, bNegro, rectPrecio, formatoDerecha)
+            g.DrawString(dto, fFila, bNegro, rectDto, formatoDerecha)
+            g.DrawString(totalLinea, fFila, bNegro, rectTotal, formatoDerecha)
+
+            yPos += 25
+            g.DrawLine(lapizFino, margenIzq, yPos, margenDer, yPos)
+            yPos += 5
+
+            _filaActualImpresion += 1
+
+            If yPos > 1000 AndAlso _filaActualImpresion < DataGridView1.Rows.Count Then
+                e.HasMorePages = True
+                Return
+            End If
+        End While
+
+        ' ===========================================================
+        ' 4. TOTALES
+        ' ===========================================================
+        If _filaActualImpresion >= DataGridView1.Rows.Count Then
+            yPos += 20
+
+            ' Asegúrate de que las cajas de texto de los totales se llaman así
+            Dim totalBase As String = TextBoxBase.Text.Replace("Base imponible :", "").Trim()
+            Dim totalIVA As String = TextBoxIva.Text.Replace("I.V.A :", "").Trim()
+            Dim totalDoc As String = TextBoxTotalAlb.Text.Replace("TOTAL :", "").Trim()
+
+            Dim anchoCajaTotales As Integer = 300
+            Dim xCaja As Integer = margenDer - anchoCajaTotales
+
+            g.DrawString("Base Imponible:", fNormal, bGrisOscuro, xCaja, yPos)
+            g.DrawString(totalBase, fNormal, bNegro, margenDer, yPos, formatoDerecha)
+            yPos += 25
+
+            g.DrawString("Impuestos (IVA):", fNormal, bGrisOscuro, xCaja, yPos)
+            g.DrawString(totalIVA, fNormal, bNegro, margenDer, yPos, formatoDerecha)
+            yPos += 30
+
+            g.FillRectangle(bAzulCorporativo, xCaja, yPos, anchoCajaTotales, 45)
+
+            Dim rectTxtTotal As New Rectangle(xCaja + 15, yPos, 150, 45)
+            Dim rectValTotal As New Rectangle(xCaja + 150, yPos, anchoCajaTotales - 165, 45)
+
+            g.DrawString("TOTAL A PAGAR", fCabecera, bBlanco, rectTxtTotal, formatoIzquierda)
+            g.DrawString(totalDoc, fTotalGordo, bBlanco, rectValTotal, formatoDerecha)
+
+            ' =================================================================
+            ' --- LOGÍSTICA Y ENVÍO (Abajo a la izquierda) ---
+            ' =================================================================
+            Dim yNotas As Integer = yPos ' Usamos la misma altura donde empiezan los totales
+
+            g.DrawString("DATOS DE ENVÍO:", fCabecera, bAzulCorporativo, margenIzq, yNotas)
+
+            ' Montamos un bloque de texto con la info de transporte
+            Dim datosEnvio As String = "Agencia: " & cboAgencias.Text & "  |  Portes: " & ComboBoxPortes.Text
+            If TextBoxBultos.Text <> "" Or TextBoxPeso.Text <> "" Then
+                datosEnvio &= vbCrLf & "Bultos: " & TextBoxBultos.Text & "  |  Peso: " & TextBoxPeso.Text & " kg"
+            End If
+            If TextBoxTracking.Text <> "" Then
+                datosEnvio &= vbCrLf & "Tracking: " & TextBoxTracking.Text
+            End If
+
+            g.DrawString(datosEnvio, fNormal, bGrisOscuro, margenIzq, yNotas + 20)
+            yNotas += 70
+
+            ' --- OBSERVACIONES ---
+            If TextBoxObservaciones.Text.Trim() <> "" Then
+                g.DrawString("Observaciones:", fCabecera, bAzulCorporativo, margenIzq, yNotas)
+                Dim rectObs As New Rectangle(margenIzq, yNotas + 20, anchoCajaTotales - 20, 50)
+                g.DrawString(TextBoxObservaciones.Text, fNormal, bGrisOscuro, rectObs)
+            End If
+
+            ' =================================================================
+            ' --- CAJA DE FIRMA (Recibí conforme) ---
+            ' =================================================================
+            ' Bajamos bastante para dejar espacio para que el cliente firme a bolígrafo
+            Dim yFirma As Integer = yPos + 140
+
+            ' Línea para firmar encima
+            g.DrawLine(lapizFino, margenIzq, yFirma, margenIzq + 250, yFirma)
+
+            ' Textos legales de recepción
+            g.DrawString("Firma y Sello del Cliente (Recibí conforme)", fCabecera, bAzulCorporativo, margenIzq, yFirma + 5)
+            g.DrawString("Fecha de recepción: ___ / ___ / 20__", fNormal, bGrisOscuro, margenIzq, yFirma + 25)
+
+            e.HasMorePages = False
+        End If
+    End Sub
 End Class
 
 Public Module GeneradorUtilidades
@@ -1225,6 +1557,7 @@ Public Module GeneradorUtilidades
         End Try
         Return lista
     End Function
+
 End Module
 
 Public Class Agencia
