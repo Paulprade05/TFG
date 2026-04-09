@@ -2,6 +2,8 @@
 Imports System.Text
 
 Public Class FrmAlbaranes
+    ' Variable para recordar si la agencia seleccionada no tiene rutas asignadas
+    Private _agenciaManualSinRutas As Boolean = False
     ' Clave principal TEXTO (Ej: ALB-26-001)
     Private _numeroAlbaranActual As String = ""
     Private _dtLineas As DataTable
@@ -70,6 +72,7 @@ Public Class FrmAlbaranes
     End Sub
 
     Private Sub CargarDesplegables()
+        _agenciaManualSinRutas = False ' Reseteamos la memoria al cargar o limpiar
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
@@ -82,6 +85,7 @@ Public Class FrmAlbaranes
             cboRuta.DataSource = dtRuta : cboRuta.DisplayMember = "NombreZona" : cboRuta.ValueMember = "ID_Ruta" : cboRuta.SelectedIndex = -1
         Catch ex As Exception
         End Try
+
     End Sub
 
     ' =========================================================
@@ -654,7 +658,8 @@ Public Class FrmAlbaranes
         DateTimePickerFecha.Value = DateTime.Now
         TextBoxBase.Text = "0,00" : TextBoxIva.Text = "0,00" : TextBoxTotalAlb.Text = "0,00"
         cboEstado.Text = "Pendiente"
-
+        ' Reseteamos los desplegables para quitar cualquier filtro de agencia aplicado
+        CargarDesplegables()
         ConfigurarGrid()
         _dtLineas = New DataTable()
         ConfigurarEstructuraDatos()
@@ -856,23 +861,67 @@ Public Class FrmAlbaranes
     ' 6. EVENTOS DE CAJAS DE TEXTO
     ' =========================================================
     Private Sub TextBoxIdCliente_Leave(sender As Object, e As EventArgs) Handles TextBoxIdCliente.Leave
-        If String.IsNullOrWhiteSpace(TextBoxIdCliente.Text) Then TextBoxCliente.Text = "" : Return
+        ' Si el campo está vacío, limpiamos todo y salimos
+        If String.IsNullOrWhiteSpace(TextBoxIdCliente.Text) Then
+            TextBoxCliente.Text = ""
+            TextBoxDireccion.Text = ""
+            TextBoxPoblacion.Text = ""
+            TextBoxCP.Text = ""
+            Return
+        End If
+
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
+
+            ' Buscamos al cliente en la base de datos
             Dim cmd As New SQLiteCommand("SELECT NombreFiscal, Direccion, Poblacion, CodigoPostal FROM Clientes WHERE CodigoCliente=@id", c)
-            cmd.Parameters.AddWithValue("@id", TextBoxIdCliente.Text)
+            cmd.Parameters.AddWithValue("@id", TextBoxIdCliente.Text.Trim())
+
             Dim r = cmd.ExecuteReader()
+
             If r.Read() Then
-                TextBoxCliente.Text = r("NombreFiscal")
-                TextBoxDireccion.Text = r("Direccion")
-                TextBoxPoblacion.Text = r("Poblacion")
-                TextBoxCP.Text = r("CodigoPostal")
+                ' ¡Cliente encontrado! Rellenamos los datos de logística del Albarán
+                TextBoxCliente.Text = r("NombreFiscal").ToString()
+                TextBoxDireccion.Text = r("Direccion").ToString()
+                TextBoxPoblacion.Text = r("Poblacion").ToString()
+                TextBoxCP.Text = r("CodigoPostal").ToString()
+            Else
+                ' El cliente NO existe
+                Dim respuesta As DialogResult = MessageBox.Show(
+                    "El código de cliente '" & TextBoxIdCliente.Text & "' no existe." & vbCrLf & vbCrLf &
+                    "¿Deseas crear esta nueva ficha de cliente ahora?",
+                    "Cliente no encontrado",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question)
+
+                If respuesta = DialogResult.Yes Then
+                    ' Guardamos el código que escribió para el Pro-Tip
+                    Dim codigoFaltante As String = TextBoxIdCliente.Text.Trim()
+
+                    ' Limpiamos el albarán
+                    TextBoxIdCliente.Text = ""
+                    TextBoxCliente.Text = ""
+
+                    ' Abrimos la ficha y le pasamos el código
+                    Dim frm As New FrmClienteDetalle()
+                    frm.CodigoNuevoPredefinido = codigoFaltante ' <--- La magia actúa de nuevo
+                    frm.ShowDialog()
+
+                    ' Devolvemos el foco para que lo vuelva a escribir ya creado
+                    TextBoxIdCliente.Focus()
+                Else
+                    ' Si no lo quiere crear, borramos el código falso
+                    TextBoxIdCliente.Text = ""
+                    TextBoxCliente.Text = ""
+                    TextBoxIdCliente.Focus()
+                End If
             End If
-        Catch
+
+        Catch ex As Exception
+            MessageBox.Show("Error al buscar cliente: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
-
     Private Sub TextBoxIdVendedor_Leave(sender As Object, e As EventArgs) Handles TextBoxIdVendedor.Leave
         If String.IsNullOrWhiteSpace(TextBoxIdVendedor.Text) Then TextBoxVendedor.Text = "" : Return
         Try
@@ -1515,6 +1564,81 @@ Public Class FrmAlbaranes
 
             e.HasMorePages = False
         End If
+    End Sub
+    ' =========================================================================
+    ' LOGÍSTICA: COMBOS DEPENDIENTES (RUTAS Y AGENCIAS)
+    ' =========================================================================
+
+    ' =========================================================================
+    ' LOGÍSTICA: COMBOS DEPENDIENTES (RUTAS Y AGENCIAS)
+    ' =========================================================================
+
+    ' 1. EL USUARIO ELIGE UNA RUTA -> Auto-seleccionamos la Agencia
+    Private Sub cboRuta_SelectionChangeCommitted(sender As Object, e As EventArgs) Handles cboRuta.SelectionChangeCommitted
+
+        ' ¡EL TRUCO! Si habíamos elegido una agencia sin rutas, no hacemos nada y salimos.
+        If _agenciaManualSinRutas Then Return
+
+        If cboRuta.SelectedValue IsNot Nothing Then
+            Try
+                Dim c = ConexionBD.GetConnection()
+                If c.State <> ConnectionState.Open Then c.Open()
+
+                Dim sql As String = "SELECT ID_Agencia FROM Rutas WHERE ID_Ruta = @idRuta LIMIT 1"
+                Using cmd As New SQLiteCommand(sql, c)
+                    cmd.Parameters.AddWithValue("@idRuta", Convert.ToInt32(cboRuta.SelectedValue))
+                    Dim result = cmd.ExecuteScalar()
+
+                    If result IsNot Nothing AndAlso Not IsDBNull(result) Then
+                        cboAgencias.SelectedValue = Convert.ToInt32(result)
+                    End If
+                End Using
+            Catch ex As Exception
+            End Try
+        End If
+    End Sub
+
+    ' 2. EL USUARIO ELIGE UNA AGENCIA -> Filtramos las Rutas disponibles
+    Private Sub cboAgencias_SelectionChangeCommitted(sender As Object, e As EventArgs) Handles cboAgencias.SelectionChangeCommitted
+        If cboAgencias.SelectedValue IsNot Nothing Then
+            FiltrarRutasPorAgencia(Convert.ToInt32(cboAgencias.SelectedValue))
+        End If
+    End Sub
+
+    ' 3. MÉTODO PARA FILTRAR EL DESPLEGABLE DE RUTAS
+    ' 3. MÉTODO PARA FILTRAR EL DESPLEGABLE DE RUTAS (CON PLAN B)
+    Private Sub FiltrarRutasPorAgencia(idAgencia As Integer)
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+
+            ' 1º INTENTO: Buscamos las rutas asignadas a esta agencia
+            Dim sql As String = "SELECT ID_Ruta, NombreZona FROM Rutas WHERE ID_Agencia = @idAgencia AND Activo = 1"
+            Dim daRutaFiltro As New SQLiteDataAdapter(sql, c)
+            daRutaFiltro.SelectCommand.Parameters.AddWithValue("@idAgencia", idAgencia)
+
+            Dim dtRutaFiltro As New DataTable()
+            daRutaFiltro.Fill(dtRutaFiltro)
+
+            ' 2º PLAN B (LA MAGIA): Si la agencia no tiene rutas (0 filas), traemos TODAS
+            If dtRutaFiltro.Rows.Count = 0 Then
+                _agenciaManualSinRutas = True '<--- ACTIVAMOS EL BLOQUEO
+
+                sql = "SELECT ID_Ruta, NombreZona FROM Rutas WHERE Activo = 1"
+                daRutaFiltro = New SQLiteDataAdapter(sql, c)
+                dtRutaFiltro = New DataTable()
+                daRutaFiltro.Fill(dtRutaFiltro)
+            Else
+                _agenciaManualSinRutas = False '<--- AGENCIA NORMAL, DESACTIVAMOS BLOQUEO
+            End If
+            ' Actualizamos el origen de datos del combo
+            cboRuta.DataSource = dtRutaFiltro
+            cboRuta.DisplayMember = "NombreZona"
+            cboRuta.ValueMember = "ID_Ruta"
+            cboRuta.SelectedIndex = -1 ' Lo dejamos en blanco para que el usuario elija
+        Catch ex As Exception
+            ' Error silencioso
+        End Try
     End Sub
 End Class
 

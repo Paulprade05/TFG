@@ -4,7 +4,7 @@ Public Class FrmClienteDetalle
 
     ' Esta variable recibe el código desde FrmClientes
     Public Property CodigoClienteSeleccionado As String = ""
-
+    Public Property CodigoNuevoPredefinido As String = ""
     Private Sub FrmClienteDetalle_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.Text = "Ficha de Cliente"
         Me.Size = New Size(850, 520) ' Tamaño ideal para una ficha emergente
@@ -161,7 +161,14 @@ Public Class FrmClienteDetalle
     ' 2. LÓGICA DE BASE DE DATOS
     ' =========================================================
     Private Sub LimpiarFormulario()
-        TextBoxCodigo.Text = GenerarProximoCodigo()
+        ' --- MAGIA DEL PRO-TIP ---
+        If CodigoNuevoPredefinido <> "" Then
+            TextBoxCodigo.Text = CodigoNuevoPredefinido ' Usamos el que escribió en la factura
+        Else
+            TextBoxCodigo.Text = GenerarProximoCodigo() ' Generamos uno nuevo normal
+        End If
+        ' -------------------------
+
         TextBoxCodigo.ReadOnly = True
         TextBoxNombreFiscal.Text = "" : TextBoxNombreComercial.Text = "" : TextBoxCIF.Text = ""
         TextBoxDireccion.Text = "" : TextBoxPoblacion.Text = "" : TextBoxProvincia.Text = ""

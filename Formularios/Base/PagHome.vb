@@ -472,17 +472,17 @@ Public Class PagHome
     ' 3. ALMACÉN
     Private Sub InformeInventarioValorado_Click(sender As Object, e As EventArgs)
         ' Multiplica el Stock Actual x Precio de Coste de cada artículo. Obligatorio presentarlo a Hacienda a final de año.
-        MsgBox("Abriendo Inventario Valorado...", MsgBoxStyle.Information, "Informes")
+        AbrirFormularioEnPanel(New FrmInformeInventario())
     End Sub
 
     Private Sub InformeStockMinimo_Click(sender As Object, e As EventArgs)
         ' Muestra solo los artículos cuyo Stock Actual sea menor o igual a 2 (o lo que tú definas). Sirve para saber qué hay que comprar hoy.
-        MsgBox("Abriendo Alerta de Stock Mínimo...", MsgBoxStyle.Information, "Informes")
+        AbrirFormularioEnPanel(New FrmInformeStockMinimo)
     End Sub
 
     Private Sub InformeArticulosMasVendidos_Click(sender As Object, e As EventArgs)
         ' Estadística pura. Agrupa las líneas de factura por artículo para saber cuáles son los productos estrella.
-        MsgBox("Abriendo Top Artículos...", MsgBoxStyle.Information, "Informes")
+        AbrirFormularioEnPanel(New FrmInformeTopArticulos)
     End Sub
 End Class
 ' =========================================================

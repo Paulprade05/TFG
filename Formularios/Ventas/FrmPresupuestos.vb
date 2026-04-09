@@ -606,22 +606,61 @@ Public Class FrmPresupuestos
     End Sub
 
     Private Sub TextBoxIdCliente_Leave(sender As Object, e As EventArgs) Handles TextBoxIdCliente.Leave
-        If String.IsNullOrWhiteSpace(TextBoxIdCliente.Text) Then TextBoxCliente.Text = "" : Return
+        ' Si el campo está vacío, limpiamos y salimos
+        If String.IsNullOrWhiteSpace(TextBoxIdCliente.Text) Then
+            TextBoxCliente.Text = ""
+            Return
+        End If
+
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
+
             Dim cmd As New SQLiteCommand("SELECT NombreFiscal, ID_Ruta FROM Clientes WHERE CodigoCliente=@id", c)
-            cmd.Parameters.AddWithValue("@id", TextBoxIdCliente.Text)
+            cmd.Parameters.AddWithValue("@id", TextBoxIdCliente.Text.Trim())
+
             Using r = cmd.ExecuteReader()
                 If r.Read() Then
+                    ' ¡Cliente encontrado! Rellenamos el nombre
                     TextBoxCliente.Text = r("NombreFiscal").ToString()
-                    'Dim idRut = r("ID_Ruta")
-                    'If Not IsDBNull(idRut) Then cboRuta.SelectedValue = Convert.ToInt32(idRut)
+
+                    ' (Mantengo tu código original comentado por si decides usarlo)
+                    ' Dim idRut = r("ID_Ruta")
+                    ' If Not IsDBNull(idRut) Then cboRuta.SelectedValue = Convert.ToInt32(idRut)
                 Else
-                    TextBoxCliente.Text = "NO EXISTE"
+                    ' El cliente NO existe, lanzamos la pregunta interactiva
+                    Dim respuesta As DialogResult = MessageBox.Show(
+                        "El código de cliente '" & TextBoxIdCliente.Text & "' no existe." & vbCrLf & vbCrLf &
+                        "¿Deseas crear esta nueva ficha de cliente ahora?",
+                        "Cliente no encontrado",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question)
+
+                    If respuesta = DialogResult.Yes Then
+                        ' Guardamos el código que escribió para pasárselo a la ficha
+                        Dim codigoFaltante As String = TextBoxIdCliente.Text.Trim()
+
+                        ' Limpiamos las cajas del presupuesto
+                        TextBoxIdCliente.Text = ""
+                        TextBoxCliente.Text = ""
+
+                        ' Abrimos la ficha y le pasamos el código para que se autorellene
+                        Dim frm As New FrmClienteDetalle()
+                        frm.CodigoNuevoPredefinido = codigoFaltante
+                        frm.ShowDialog()
+
+                        ' Devolvemos el foco para que lo escriba ya sabiendo que existe
+                        TextBoxIdCliente.Focus()
+                    Else
+                        ' Si dice que no, borramos el código falso
+                        TextBoxIdCliente.Text = ""
+                        TextBoxCliente.Text = ""
+                        TextBoxIdCliente.Focus()
+                    End If
                 End If
             End Using
-        Catch
+        Catch ex As Exception
+            MessageBox.Show("Error al buscar cliente: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
 
