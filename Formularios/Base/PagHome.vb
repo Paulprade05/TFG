@@ -7,6 +7,9 @@ Public Class PagHome
     ' Importamos la función nativa de Windows para congelar el dibujo
     Private Declare Function SendMessage Lib "user32" Alias "SendMessageA" (ByVal hWnd As IntPtr, ByVal wMsg As Integer, ByVal wParam As Integer, ByVal lParam As Integer) As Integer
     Private Const WM_SETREDRAW As Integer = &HB
+    ' Vigilante para las copias automáticas
+    Private WithEvents RelojBackups As New Timer()
+    Private ultimoBackupRealizado As String = "" ' Para evitar que haga 60 copias en el mismo minuto
     Private Sub PagHome_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         ' 1. CONFIGURACIÓN DEL MENÚ LATERAL (TREEVIEW)
         ' Fijamos el ancho y lo anclamos a la izquierda para que ocupe todo el alto
@@ -93,7 +96,36 @@ Public Class PagHome
                 subItem.Padding = New Padding(10, 8, 10, 8)
             Next
         End If
+        ' =========================================================
+        ' AÑADIR DESPLEGABLE DE CONFIGURACIÓN DINÁMICAMENTE
+        ' =========================================================
+        Dim btnConfiguracion As ToolStripMenuItem = Nothing
+        For Each itm As ToolStripItem In miMenu.Items
+            If TypeOf itm Is ToolStripMenuItem AndAlso (itm.Text.Trim().ToLower() = "configuracion" OrElse itm.Text.Trim().ToLower() = "configuración") Then
+                btnConfiguracion = DirectCast(itm, ToolStripMenuItem)
+                Exit For
+            End If
+        Next
 
+        If btnConfiguracion IsNot Nothing Then
+            btnConfiguracion.DropDownItems.Clear()
+
+            Dim menuDesplegableConf = DirectCast(btnConfiguracion.DropDown, ToolStripDropDownMenu)
+            menuDesplegableConf.ShowImageMargin = False
+            menuDesplegableConf.ShowCheckMargin = False
+            menuDesplegableConf.BackColor = Color.FromArgb(40, 50, 70)
+
+            ' SOLO LAS 3 OPCIONES QUE HAS PEDIDO
+            btnConfiguracion.DropDownItems.Add("🏢 Datos de la Empresa", Nothing, AddressOf ConfigDatosEmpresa_Click)
+            btnConfiguracion.DropDownItems.Add("👥 Usuarios y Permisos", Nothing, AddressOf ConfigUsuarios_Click)
+            btnConfiguracion.DropDownItems.Add("💾 Copias de Seguridad", Nothing, AddressOf ConfigBackups_Click)
+
+            For Each subItem As ToolStripItem In btnConfiguracion.DropDownItems
+                subItem.ForeColor = Color.WhiteSmoke
+                subItem.Font = New Font("Segoe UI", 10.5F, FontStyle.Regular)
+                subItem.Padding = New Padding(10, 8, 10, 8)
+            Next
+        End If
         ' 2. Bucle para expandir el área clickeable de cada botón
         For Each item As ToolStripItem In miMenu.Items
             ' ... (tu código sigue normal aquí) ...
@@ -145,6 +177,9 @@ Public Class PagHome
         ' 5. MAGIA INICIAL: ABRIR EL DASHBOARD POR DEFECTO
         ' =========================================================
         AbrirFormulario(New FrmDashboard())
+        ' Arrancamos el vigilante de copias de seguridad (revisa cada 30 segundos)
+        RelojBackups.Interval = 30000
+        RelojBackups.Start()
     End Sub
     Private Sub ConfigurarTreeViewModerno()
         Dim tv = TvNavegacion ' Asegúrate de que tu control se llame así
@@ -484,7 +519,118 @@ Public Class PagHome
         ' Estadística pura. Agrupa las líneas de factura por artículo para saber cuáles son los productos estrella.
         AbrirFormularioEnPanel(New FrmInformeTopArticulos)
     End Sub
+    ' =========================================================
+    ' EVENTOS CLIC DE CONFIGURACIÓN
+    ' =========================================================
+    Private Sub ConfigDatosEmpresa_Click(sender As Object, e As EventArgs)
+        Dim frm As New FrmConfiguracion()
+        frm.IrAPestana(0) ' Pestaña Empresa
+        frm.ShowDialog()
+        CargarDatosEmpresa() ' Refrescamos el logo al cerrar
+    End Sub
+
+    Private Sub ConfigUsuarios_Click(sender As Object, e As EventArgs)
+        Dim frm As New FrmConfiguracion()
+        frm.IrAPestana(1) ' Pestaña Usuarios
+        frm.ShowDialog()
+    End Sub
+
+    Private Sub ConfigBackups_Click(sender As Object, e As EventArgs)
+        Dim frm As New FrmConfiguracion()
+        frm.IrAPestana(2) ' Pestaña Copias de Seguridad
+        frm.ShowDialog()
+    End Sub
+    ' =========================================================
+    ' MOTOR DE COPIAS DE SEGURIDAD EN SEGUNDO PLANO
+    ' =========================================================
+    Private Sub RelojBackups_Tick(sender As Object, e As EventArgs) Handles RelojBackups.Tick
+        Dim horaActual As String = DateTime.Now.ToString("HH:mm")
+
+        ' Si ya hemos hecho la copia en este minuto exacto, no hacemos nada más
+        If ultimoBackupRealizado = DateTime.Now.ToString("yyyyMMdd_HHmm") Then Return
+
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+
+            ' Consultamos qué quiere el usuario
+            Dim sql As String = "SELECT RutaBackup, AutoBackup, FrecuenciaBackup, HoraBackup, DiasBackup FROM Empresa WHERE ID = 1"
+            Using cmd As New SQLiteCommand(sql, c)
+                Using r As SQLiteDataReader = cmd.ExecuteReader()
+                    If r.Read() Then
+
+                        ' 1. ¿Están activadas las copias automáticas?
+                        Dim isAuto As Boolean = If(IsDBNull(r("AutoBackup")), False, Convert.ToBoolean(r("AutoBackup")))
+                        If Not isAuto Then Return
+
+                        ' 2. ¿Es la hora correcta?
+                        Dim horaConfigurada As String = If(IsDBNull(r("HoraBackup")), "", r("HoraBackup").ToString())
+                        If horaActual <> horaConfigurada Then Return
+
+                        ' 3. Si es Semanal, ¿toca hoy?
+                        Dim frec As String = If(IsDBNull(r("FrecuenciaBackup")), "Diaria", r("FrecuenciaBackup").ToString())
+                        If frec = "Semanal" Then
+                            Dim dias As String = If(IsDBNull(r("DiasBackup")), "", r("DiasBackup").ToString())
+                            ' .NET usa 0 para Domingo. Nuestro UI usa 0 para Lunes. Lo adaptamos:
+                            Dim diaHoy As Integer = CInt(DateTime.Now.DayOfWeek) - 1
+                            If diaHoy = -1 Then diaHoy = 6
+
+                            If Not dias.Split(","c).Contains(diaHoy.ToString()) Then Return
+                        End If
+
+                        ' ----------------------------------------------------
+                        ' ¡BINGO! TOCA HACER COPIA DE SEGURIDAD AHORA MISMO
+                        ' ----------------------------------------------------
+                        Dim rutaBase As String = If(IsDBNull(r("RutaBackup")), "", r("RutaBackup").ToString().Trim())
+                        If String.IsNullOrEmpty(rutaBase) Then
+                            rutaBase = Path.Combine(Application.StartupPath, "BD\CopiasSeguridad")
+                        End If
+                        If Not Directory.Exists(rutaBase) Then Directory.CreateDirectory(rutaBase)
+
+                        ' ⚠️ IMPORTANTE: Ajusta el nombre de origen a tu base de datos real
+                        Dim archivoOrigen As String = Path.Combine(Application.StartupPath, "BD\Optima.db")
+                        Dim nombreCopia As String = "OptimaDB_AUTO_" & DateTime.Now.ToString("yyyyMMdd_HHmmss") & ".sqlite"
+                        Dim rutaDestino As String = Path.Combine(rutaBase, nombreCopia)
+
+                        ' Copiamos en silencio absoluto
+                        File.Copy(archivoOrigen, rutaDestino, True)
+                        LimpiarCopiasAntiguas(rutaBase)
+                        ' Registramos que ya se ha hecho para no repetirla en este minuto
+                        ultimoBackupRealizado = DateTime.Now.ToString("yyyyMMdd_HHmm")
+                    End If
+                End Using
+            End Using
+        Catch ex As Exception
+            ' Si falla (porque la BD está ocupada), nos callamos. 
+            ' Es un proceso en segundo plano, no queremos asustar al usuario con mensajes de error de la nada.
+        End Try
+    End Sub
+    Private Sub LimpiarCopiasAntiguas(rutaCarpeta As String)
+        Try
+            Dim directorio As New DirectoryInfo(rutaCarpeta)
+
+            ' 1. Obtenemos solo los archivos que son automáticos (para no borrar las manuales)
+            ' Los ordenamos por fecha de creación (de más antiguo a más nuevo)
+            Dim archivosAuto = directorio.GetFiles("OptimaDB_AUTO_*.sqlite") _
+                                        .OrderBy(Function(f) f.CreationTime) _
+                                        .ToList()
+
+            ' 2. Si hay más de 5, calculamos cuántos debemos borrar
+            If archivosAuto.Count > 5 Then
+                Dim cuantosBorrar As Integer = archivosAuto.Count - 5
+
+                ' Borramos desde el primero de la lista (el más viejo)
+                For i As Integer = 0 To cuantosBorrar - 1
+                    archivosAuto(i).Delete()
+                Next
+            End If
+        Catch ex As Exception
+            ' En procesos automáticos es mejor no interrumpir al usuario si falla la limpieza
+            Debug.WriteLine("Error limpiando copias: " & ex.Message)
+        End Try
+    End Sub
 End Class
+
 ' =========================================================
 ' CLASE PARA PERSONALIZAR LOS COLORES DEL MENÚ (RENDERER)
 ' =========================================================

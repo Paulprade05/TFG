@@ -2,13 +2,10 @@
 Imports System.Data.SQLite ' Necesario para leer la BD
 
 Public Class PagAcceso
-
     ' Creamos el panel central por código (La "Tarjeta" de Login)
     Private PanelLogin As New Panel()
-
-    ' NUEVO: Creamos el CheckBox para recordar credenciales
+    ' Creamos el CheckBox para recordar credenciales
     Private CheckBoxRecordar As New CheckBox()
-
     ' Importamos la función nativa para congelar el dibujo de la ventana
     Private Declare Function SendMessage Lib "user32" Alias "SendMessageA" (ByVal hWnd As IntPtr, ByVal wMsg As Integer, ByVal wParam As Integer, ByVal lParam As Integer) As Integer
     Private Const WM_SETREDRAW As Integer = &HB
@@ -17,7 +14,6 @@ Public Class PagAcceso
         InitializeComponent()
         Me.StartPosition = FormStartPosition.Manual
         Me.Location = New Point(-10000, -10000)
-
         ConstruirInterfazPremium()
     End Sub
 
@@ -25,11 +21,9 @@ Public Class PagAcceso
         CentrarPanelLogin()
         Me.Location = New Point((Screen.PrimaryScreen.WorkingArea.Width - Me.Width) \ 2,
                             (Screen.PrimaryScreen.WorkingArea.Height - Me.Height) \ 2)
-
-        ' NUEVO 1: Cargar las empresas en el ComboBox
+        ' Cargar las empresas en el ComboBox
         CargarEmpresas()
-
-        ' NUEVO 2: Leer los datos guardados de la última sesión
+        ' Leer los datos guardados de la última sesión
         If My.Settings.SavedUser <> "" Then
             TextBoxUsuario.Text = My.Settings.SavedUser
             TextBoxPassword.Text = My.Settings.SavedPass
@@ -52,7 +46,7 @@ Public Class PagAcceso
 
         Me.Controls.Add(PanelLogin)
 
-        ' --- B) ATRAPAR EL LOGO ---
+        ' --- B) COGER EL LOGO ---
         Dim picLogo As PictureBox = Me.Controls.OfType(Of PictureBox)().FirstOrDefault()
         If picLogo IsNot Nothing Then
             PanelLogin.Controls.Add(picLogo)
@@ -66,7 +60,7 @@ Public Class PagAcceso
         ConfigurarCajaTexto(TextBoxUsuario, "USUARIO", 50, 150)
         ConfigurarCajaTexto(TextBoxPassword, "CONTRASEÑA", 50, 230)
 
-        ' --- NUEVO: CONFIGURAR CHECKBOX "RECORDAR" ---
+        ' --- CONFIGURAR CHECKBOX "RECORDAR DATOS SESION" ---
         PanelLogin.Controls.Add(CheckBoxRecordar)
         CheckBoxRecordar.Bounds = New Rectangle(50, 285, 200, 20)
         CheckBoxRecordar.Text = "Recordar mis datos"
@@ -77,13 +71,14 @@ Public Class PagAcceso
 
         ' --- D) CONFIGURAR EL BOTÓN DEL OJITO ---
         PanelLogin.Controls.Add(ButtonVerPasswd)
-        ButtonVerPasswd.Bounds = New Rectangle(315, 257, 33, 26) ' Ajustado a la nueva altura
+        ButtonVerPasswd.Bounds = New Rectangle(315, 257, 33, 26)
         ButtonVerPasswd.FlatStyle = FlatStyle.Flat
         ButtonVerPasswd.FlatAppearance.BorderSize = 0
         ButtonVerPasswd.BackColor = Color.White
         ButtonVerPasswd.Cursor = Cursors.Hand
         ButtonVerPasswd.BringToFront()
         TextBoxPassword.UseSystemPasswordChar = True
+
         ' --- E) CONFIGURAR EL COMBOBOX EMPRESA ---
         Dim cmbEmpresa As ComboBox = Me.Controls.OfType(Of ComboBox).FirstOrDefault()
         If cmbEmpresa IsNot Nothing Then
