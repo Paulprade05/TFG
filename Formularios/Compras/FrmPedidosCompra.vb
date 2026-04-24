@@ -1,302 +1,1130 @@
 ﻿Imports System.Data.SQLite
-Imports System.Windows.Forms
+
 Public Class FrmPedidosCompra
-    Inherits Form
-    ' =========================================================
-    ' CONTROLES DE LA INTERFAZ
-    ' =========================================================
-    ' Cabecera
-    Private txtNumeroPedido As New TextBox()
-    Private dtpFecha As New DateTimePicker()
-    Private cboProveedor As New ComboBox()
-    Private cboEstado As New ComboBox()
-    Private txtObservaciones As New TextBox()
 
-    ' Líneas (Rejilla)
-    Private WithEvents dgvLineas As New DataGridView()
+#Region "1. Variables Globales y Propiedades"
+    Private _numeroPedidoActual As String = ""
+    Private _dtLineas As DataTable
+    Private _idsParaBorrar As New List(Of Integer)
+    ' --- MOTOR DE IMPRESIÓN DEL DOCUMENTO ---
+    Private WithEvents btnImprimir As New Button()
+    Private WithEvents docImprimir As New Printing.PrintDocument()
+    Private _filaActualImpresion As Integer = 0
+    Private WithEvents cboFormaPago As New ComboBox()
+    Private lblFormaPago As New Label() With {.Text = "Forma de Pago", .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
+    Private WithEvents cboEstado As New ComboBox()
+#End Region
 
-    ' Totales y Botones
-    Private lblTotalPedido As New Label()
-    Private WithEvents btnGuardar As New Button()
-    Private WithEvents btnNuevo As New Button()
-    Private WithEvents btnEliminarFila As New Button()
-
+#Region "2. Eventos de Inicialización (Load)"
     Private Sub FrmPedidosCompra_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-        Me.Text = "Nuevo Pedido a Proveedor"
-        Me.BackColor = Color.FromArgb(240, 245, 250) ' Fondo gris muy clarito
+        Me.SuspendLayout()
 
-        ConstruirInterfaz()
-        ConfigurarGrid()
+        ConfigurarDiseñoResponsive()
+        EstilizarGrid(DataGridView1)
 
-        CargarProveedores()
-        PrepararNuevoPedido()
-    End Sub
+        ' Combos
+        Me.Controls.Add(lblFormaPago) : Me.Controls.Add(cboFormaPago)
+        cboFormaPago.DropDownStyle = ComboBoxStyle.DropDownList
+        CargarDesplegables()
 
-    ' =========================================================
-    ' 1. CONSTRUCCIÓN DE LA INTERFAZ (DISEÑO RESPONSIVE)
-    ' =========================================================
-    Private Sub ConstruirInterfaz()
-        Me.Controls.Clear()
-
-        ' --- PANEL SUPERIOR (CABECERA OSCURA) ---
-        Dim pnlHeader As New Panel With {
-            .Dock = DockStyle.Top,
-            .Height = 180,
-            .BackColor = Color.FromArgb(55, 65, 85)
-        }
-        Me.Controls.Add(pnlHeader)
-
-        Dim lblTitulo As New Label With {.Text = "PEDIDO DE COMPRA A PROVEEDOR", .Font = New Font("Segoe UI", 16, FontStyle.Bold), .ForeColor = Color.WhiteSmoke, .AutoSize = True, .Location = New Point(30, 20)}
-        pnlHeader.Controls.Add(lblTitulo)
-
-        ' Función ayudante para crear campos en la cabecera
-        Dim CrearCampoHeader = Sub(texto As String, ctrl As Control, x As Integer, y As Integer, w As Integer)
-                                   Dim lbl As New Label With {.Text = texto, .Location = New Point(x, y), .AutoSize = True, .ForeColor = Color.FromArgb(200, 210, 220), .Font = New Font("Segoe UI", 9)}
-                                   ctrl.Bounds = New Rectangle(x, y + 20, w, 28) : ctrl.Font = New Font("Segoe UI", 10)
-                                   pnlHeader.Controls.Add(lbl) : pnlHeader.Controls.Add(ctrl)
-                               End Sub
-
-        CrearCampoHeader("Nº de Pedido", txtNumeroPedido, 30, 70, 150)
-        txtNumeroPedido.BackColor = Color.FromArgb(40, 50, 70)
-        txtNumeroPedido.ForeColor = Color.White
-        txtNumeroPedido.ReadOnly = True ' Se autogenera
-
-        CrearCampoHeader("Fecha", dtpFecha, 200, 70, 130)
-        dtpFecha.Format = DateTimePickerFormat.Short
-
-        CrearCampoHeader("Proveedor", cboProveedor, 350, 70, 350)
-        cboProveedor.DropDownStyle = ComboBoxStyle.DropDownList
-
-        CrearCampoHeader("Estado del Pedido", cboEstado, 30, 125, 150)
+        Me.Controls.Add(cboEstado)
         cboEstado.DropDownStyle = ComboBoxStyle.DropDownList
-        cboEstado.Items.AddRange({"Pendiente", "Recibido", "Cancelado"})
-        cboEstado.SelectedIndex = 0
+        cboEstado.Items.Clear()
+        cboEstado.Items.AddRange(New String() {"Pendiente", "Enviado al Proveedor", "Recibido Parcial", "Recibido"})
 
-        CrearCampoHeader("Observaciones / Notas para el almacén", txtObservaciones, 200, 125, 500)
+        ReorganizarControlesAutomaticamente()
+        ConfigurarColumnasGrid()
 
-        ' --- PANEL CENTRAL (GRID DE LÍNEAS) ---
-        Dim pnlCentral As New Panel With {
-            .Dock = DockStyle.Fill,
-            .Padding = New Padding(30, 20, 30, 20)
-        }
-        Me.Controls.Add(pnlCentral)
-        pnlCentral.BringToFront()
+        ' CONFIGURACIÓN DEL BOTÓN IMPRIMIR (Exportar PDF)
+        btnImprimir.Text = "Exportar PDF"
+        btnImprimir.Size = New Size(120, 35)
+        btnImprimir.Location = New Point(ButtonGuardar.Location.X, ButtonGuardar.Location.Y + ButtonGuardar.Height + 10)
+        btnImprimir.BackColor = Color.FromArgb(40, 140, 90)
+        btnImprimir.ForeColor = Color.White
+        btnImprimir.FlatStyle = FlatStyle.Flat
+        btnImprimir.FlatAppearance.BorderSize = 0
+        btnImprimir.Font = New Font("Segoe UI", 10, FontStyle.Bold)
+        btnImprimir.Cursor = Cursors.Hand
+        Me.Controls.Add(btnImprimir)
+        btnImprimir.BringToFront()
 
-        dgvLineas.Dock = DockStyle.Fill
-        dgvLineas.BackgroundColor = Color.White
-        dgvLineas.BorderStyle = BorderStyle.None
-        Try : FrmPresupuestos.EstilizarGrid(dgvLineas) : Catch : End Try ' Usa tu estilo si existe
-        pnlCentral.Controls.Add(dgvLineas)
-
-        ' --- PANEL INFERIOR (TOTALES Y BOTONES) ---
-        Dim pnlFooter As New Panel With {
-            .Dock = DockStyle.Bottom,
-            .Height = 80,
-            .BackColor = Color.White,
-            .Padding = New Padding(30, 0, 30, 0)
-        }
-        Me.Controls.Add(pnlFooter)
-
-        ' Línea separadora
-        Dim linea As New Label With {.Dock = DockStyle.Top, .Height = 1, .BackColor = Color.LightGray}
-        pnlFooter.Controls.Add(linea)
-
-        btnNuevo.Text = "+ Nuevo Pedido" : btnNuevo.Bounds = New Rectangle(30, 20, 150, 40)
-        btnNuevo.BackColor = Color.FromArgb(70, 75, 80) : btnNuevo.ForeColor = Color.White : btnNuevo.FlatStyle = FlatStyle.Flat : btnNuevo.FlatAppearance.BorderSize = 0 : btnNuevo.Cursor = Cursors.Hand
-        pnlFooter.Controls.Add(btnNuevo)
-
-        btnGuardar.Text = "💾 Guardar Pedido" : btnGuardar.Bounds = New Rectangle(190, 20, 160, 40)
-        btnGuardar.BackColor = Color.FromArgb(0, 120, 215) : btnGuardar.ForeColor = Color.White : btnGuardar.Font = New Font("Segoe UI", 10, FontStyle.Bold) : btnGuardar.FlatStyle = FlatStyle.Flat : btnGuardar.FlatAppearance.BorderSize = 0 : btnGuardar.Cursor = Cursors.Hand
-        pnlFooter.Controls.Add(btnGuardar)
-
-        btnEliminarFila.Text = "🗑️ Quitar Línea" : btnEliminarFila.Bounds = New Rectangle(360, 20, 130, 40)
-        btnEliminarFila.BackColor = Color.FromArgb(209, 52, 56) : btnEliminarFila.ForeColor = Color.White : btnEliminarFila.FlatStyle = FlatStyle.Flat : btnEliminarFila.FlatAppearance.BorderSize = 0 : btnEliminarFila.Cursor = Cursors.Hand
-        pnlFooter.Controls.Add(btnEliminarFila)
-
-        Dim lblTextoTotal As New Label With {.Text = "TOTAL PEDIDO:", .AutoSize = True, .Location = New Point(650, 30), .Font = New Font("Segoe UI", 12, FontStyle.Bold), .ForeColor = Color.DimGray, .Anchor = AnchorStyles.Right Or AnchorStyles.Top}
-        pnlFooter.Controls.Add(lblTextoTotal)
-
-        lblTotalPedido.Text = "0,00 €" : lblTotalPedido.AutoSize = True : lblTotalPedido.Location = New Point(790, 25) : lblTotalPedido.Font = New Font("Segoe UI", 16, FontStyle.Bold) : lblTotalPedido.ForeColor = Color.FromArgb(40, 140, 90) : lblTotalPedido.Anchor = AnchorStyles.Right Or AnchorStyles.Top
-        pnlFooter.Controls.Add(lblTotalPedido)
-    End Sub
-
-    ' =========================================================
-    ' 2. CONFIGURACIÓN DEL GRID DE LÍNEAS
-    ' =========================================================
-    Private Sub ConfigurarGrid()
-        dgvLineas.Columns.Clear()
-
-        dgvLineas.Columns.Add("ID_Articulo", "Cód. Art.")
-        dgvLineas.Columns("ID_Articulo").Width = 80
-
-        dgvLineas.Columns.Add("Descripcion", "Descripción del Artículo")
-        dgvLineas.Columns("Descripcion").AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
-
-        dgvLineas.Columns.Add("Cantidad", "Cantidad")
-        dgvLineas.Columns("Cantidad").Width = 100
-        dgvLineas.Columns("Cantidad").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter
-        dgvLineas.Columns("Cantidad").DefaultCellStyle.Format = "N2"
-
-        dgvLineas.Columns.Add("Precio", "Precio Coste")
-        dgvLineas.Columns("Precio").Width = 120
-        dgvLineas.Columns("Precio").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
-        dgvLineas.Columns("Precio").DefaultCellStyle.Format = "C2"
-
-        dgvLineas.Columns.Add("Total", "Total Línea")
-        dgvLineas.Columns("Total").Width = 130
-        dgvLineas.Columns("Total").DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight
-        dgvLineas.Columns("Total").DefaultCellStyle.Format = "C2"
-        dgvLineas.Columns("Total").ReadOnly = True ' El total se calcula solo
-        dgvLineas.Columns("Total").DefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245)
-        dgvLineas.Columns("Total").DefaultCellStyle.Font = New Font("Segoe UI", 10, FontStyle.Bold)
-
-        dgvLineas.AllowUserToAddRows = True
-    End Sub
-
-    ' Calcula el total de la fila cuando cambias Cantidad o Precio
-    Private Sub dgvLineas_CellEndEdit(sender As Object, e As DataGridViewCellEventArgs) Handles dgvLineas.CellEndEdit
-        If e.RowIndex >= 0 Then
-            Dim row = dgvLineas.Rows(e.RowIndex)
-            Dim cant As Decimal = 0
-            Dim precio As Decimal = 0
-
-            Decimal.TryParse(If(row.Cells("Cantidad").Value Is Nothing, "0", row.Cells("Cantidad").Value.ToString()), cant)
-            Decimal.TryParse(If(row.Cells("Precio").Value Is Nothing, "0", row.Cells("Precio").Value.ToString()), precio)
-
-            row.Cells("Total").Value = cant * precio
-            RecalcularTotalPedido()
+        Dim ultimoNum As String = ObtenerUltimoNumeroPedido()
+        If Not String.IsNullOrEmpty(ultimoNum) Then
+            CargarPedido(ultimoNum)
+        Else
+            LimpiarFormulario()
         End If
+        Me.ResumeLayout(True)
     End Sub
 
-    Private Sub dgvLineas_RowsRemoved(sender As Object, e As DataGridViewRowsRemovedEventArgs) Handles dgvLineas.RowsRemoved
-        RecalcularTotalPedido()
-    End Sub
-
-    Private Sub btnEliminarFila_Click(sender As Object, e As EventArgs) Handles btnEliminarFila.Click
-        If dgvLineas.CurrentRow IsNot Nothing AndAlso Not dgvLineas.CurrentRow.IsNewRow Then
-            dgvLineas.Rows.Remove(dgvLineas.CurrentRow)
-        End If
-    End Sub
-
-    Private Sub RecalcularTotalPedido()
-        Dim totalBase As Decimal = 0
-        For Each row As DataGridViewRow In dgvLineas.Rows
-            If Not row.IsNewRow Then
-                Dim valLinea As Decimal = 0
-                Decimal.TryParse(If(row.Cells("Total").Value Is Nothing, "0", row.Cells("Total").Value.ToString()), valLinea)
-                totalBase += valLinea
-            End If
-        Next
-        lblTotalPedido.Text = totalBase.ToString("C2")
-        lblTotalPedido.Tag = totalBase ' Guardamos el valor numérico oculto
-    End Sub
-
-    ' =========================================================
-    ' 3. LÓGICA DE BASE DE DATOS
-    ' =========================================================
-    Private Sub CargarProveedores()
+    Private Sub CargarDesplegables()
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
-            ' Ajusta "NombreFiscal" y "ID_Proveedor" a como se llamen en tu tabla Proveedores
-            Dim cmd As New SQLiteCommand("SELECT ID_Proveedor, NombreFiscal FROM Proveedores ORDER BY NombreFiscal", c)
-            Dim da As New SQLiteDataAdapter(cmd)
-            Dim dt As New DataTable()
-            da.Fill(dt)
 
-            cboProveedor.DisplayMember = "NombreFiscal"
-            cboProveedor.ValueMember = "ID_Proveedor"
-            cboProveedor.DataSource = dt
-            cboProveedor.SelectedIndex = -1
+            Dim daPago As New SQLiteDataAdapter("SELECT ID_FormaPago, Descripcion FROM FormasPago WHERE Activo=1", c)
+            Dim dtPago As New DataTable() : daPago.Fill(dtPago)
+            cboFormaPago.DataSource = dtPago : cboFormaPago.DisplayMember = "Descripcion" : cboFormaPago.ValueMember = "ID_FormaPago" : cboFormaPago.SelectedIndex = -1
         Catch ex As Exception
-            ' Si no tienes la tabla Proveedores aún, mostramos un error amigable
-            MessageBox.Show("Aviso: No se ha podido cargar la lista de proveedores. Asegúrate de tener proveedores creados.")
         End Try
     End Sub
+#End Region
 
-    Private Sub PrepararNuevoPedido()
-        txtNumeroPedido.Text = "PED-" & DateTime.Now.ToString("yyMMddHHmmss") ' Autogeneramos uno temporal único
-        dtpFecha.Value = DateTime.Now
-        cboProveedor.SelectedIndex = -1
-        cboEstado.SelectedIndex = 0
-        txtObservaciones.Text = ""
-        dgvLineas.Rows.Clear()
-        RecalcularTotalPedido()
+#Region "3. Configuración UI y Diseño"
+    Private Sub ConfigurarDiseñoResponsive()
+        DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
+        Dim controlesTotales As Control() = {LabelBase, TextBoxBase, LabelIva, TextBoxIva, Label7, TextBoxTotalPed, LabelStock}
+        For Each ctrl In controlesTotales : ctrl.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right : Next
+        ButtonAnterior.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        ButtonSiguiente.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        Dim botonesIzq As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPed, ButtonBorrarLineas, ButtonNuevaLinea}
+        For Each ctrl In botonesIzq : ctrl.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left : Next
+        If LabelStock IsNot Nothing Then LabelStock.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
     End Sub
 
-    Private Sub btnNuevo_Click(sender As Object, e As EventArgs) Handles btnNuevo.Click
-        If MessageBox.Show("¿Limpiar todo para crear un nuevo pedido?", "Nuevo", MessageBoxButtons.YesNo) = DialogResult.Yes Then
-            PrepararNuevoPedido()
-        End If
+    Private Sub ConfigurarColumnasGrid()
+        DataGridView1.AutoGenerateColumns = False
+        DataGridView1.AllowUserToAddRows = False
+        DataGridView1.Columns.Clear()
+
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "ID_Linea", .DataPropertyName = "ID_Linea", .Visible = False})
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "NumeroOrden", .DataPropertyName = "NumeroOrden", .HeaderText = "Nº", .Width = 40, .ReadOnly = True, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleCenter}})
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "ID_Articulo", .DataPropertyName = "ID_Articulo", .HeaderText = "ID Art", .Width = 60})
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Descripcion", .DataPropertyName = "Descripcion", .HeaderText = "Descripción", .AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill})
+
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "CantidadSolicitada", .DataPropertyName = "CantidadSolicitada", .HeaderText = "Cantidad", .Width = 75, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "N2", .BackColor = Color.Ivory}})
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "PrecioUnitario", .DataPropertyName = "PrecioUnitario", .HeaderText = "Precio Coste", .Width = 95, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "C2"}})
+
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Descuento", .DataPropertyName = "Descuento", .HeaderText = "% Dto", .Width = 60, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "N2"}})
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "PorcentajeIVA", .DataPropertyName = "PorcentajeIVA", .HeaderText = "% IVA", .Width = 60, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "N0"}})
+
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Total", .DataPropertyName = "Total", .HeaderText = "Total Base", .ReadOnly = True, .Width = 90, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "C2", .BackColor = Color.WhiteSmoke}})
+        DataGridView1.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "TotalConIVA", .DataPropertyName = "TotalConIVA", .HeaderText = "Total (+IVA)", .ReadOnly = True, .Width = 100, .DefaultCellStyle = New DataGridViewCellStyle With {.Alignment = DataGridViewContentAlignment.MiddleRight, .Format = "C2", .BackColor = Color.FromArgb(230, 240, 250)}})
     End Sub
 
-    Private Sub btnGuardar_Click(sender As Object, e As EventArgs) Handles btnGuardar.Click
-        If cboProveedor.SelectedIndex = -1 Then
-            MessageBox.Show("Debes seleccionar un proveedor.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning) : Return
+    Public Shared Sub EstilizarGrid(dgv As DataGridView)
+        dgv.BackgroundColor = Color.White : dgv.BorderStyle = BorderStyle.None : dgv.CellBorderStyle = DataGridViewCellBorderStyle.None
+        dgv.EnableHeadersVisualStyles = False : dgv.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None
+        dgv.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(45, 55, 65)
+        dgv.ColumnHeadersDefaultCellStyle.ForeColor = Color.White
+        dgv.ColumnHeadersDefaultCellStyle.Font = New Font("Segoe UI", 10, FontStyle.Bold)
+        dgv.ColumnHeadersHeight = 40
+        dgv.DefaultCellStyle.BackColor = Color.White : dgv.DefaultCellStyle.ForeColor = Color.Black
+        dgv.DefaultCellStyle.SelectionBackColor = Color.FromArgb(200, 230, 255) : dgv.DefaultCellStyle.SelectionForeColor = Color.Black
+        dgv.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(245, 245, 245)
+        dgv.AlternatingRowsDefaultCellStyle.SelectionBackColor = Color.FromArgb(200, 230, 255)
+        dgv.RowHeadersVisible = False : dgv.RowTemplate.Height = 35 : dgv.SelectionMode = DataGridViewSelectionMode.FullRowSelect : dgv.MultiSelect = False
+    End Sub
+#End Region
+
+#Region "4. Lógica de Negocio y Cálculos"
+    Private Sub CalcularTotalesGenerales()
+        Dim base As Decimal = 0
+        Dim sumaIva As Decimal = 0
+
+        If _dtLineas IsNot Nothing Then
+            For Each row As DataRow In _dtLineas.Rows
+                If row.RowState <> DataRowState.Deleted Then
+                    Dim t As Decimal = 0
+                    Dim ivaLinea As Decimal = 21
+
+                    If _dtLineas.Columns.Contains("Total") Then Decimal.TryParse(row("Total").ToString(), t)
+                    If _dtLineas.Columns.Contains("PorcentajeIVA") AndAlso Not IsDBNull(row("PorcentajeIVA")) Then
+                        Decimal.TryParse(row("PorcentajeIVA").ToString(), ivaLinea)
+                    End If
+
+                    base += t
+                    sumaIva += t * (ivaLinea / 100)
+                End If
+            Next
         End If
 
-        If dgvLineas.Rows.Count <= 1 Then ' <= 1 porque siempre hay una fila vacía nueva
-            MessageBox.Show("El pedido debe tener al menos una línea de artículo.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning) : Return
-        End If
+        If TextBoxBase IsNot Nothing Then TextBoxBase.Text = base.ToString("C2")
+        If TextBoxIva IsNot Nothing Then TextBoxIva.Text = sumaIva.ToString("C2")
+        If TextBoxTotalPed IsNot Nothing Then TextBoxTotalPed.Text = (base + sumaIva).ToString("C2")
+    End Sub
 
+    Private Sub LimpiarFormulario()
+        _numeroPedidoActual = ""
+        _idsParaBorrar.Clear()
+        TextBoxPedido.Text = GenerarProximoNumeroPedido()
+
+        TextBoxProveedor.Text = "" : TextBoxIdProveedor.Text = "" : TextBoxProveedor.Tag = Nothing
+        TextBoxComprador.Text = "" : TextBoxIdComprador.Text = ""
+        TextBoxObservaciones.Text = ""
+        TextBoxFecha.Text = DateTime.Now.ToShortDateString()
+        DateTimePickerFecha.Value = DateTime.Now
+        cboEstado.Text = "Pendiente"
+        TextBoxBase.Text = "0,00 €" : TextBoxIva.Text = "0,00 €" : TextBoxTotalPed.Text = "0,00 €"
+
+        _dtLineas = New DataTable()
+        ConfigurarEstructuraDataTable()
+        DataGridView1.DataSource = _dtLineas
+        If cboFormaPago IsNot Nothing Then cboFormaPago.SelectedIndex = -1
+        TextBoxIdProveedor.Focus()
+    End Sub
+
+    Private Sub ConfigurarEstructuraDataTable()
+        With _dtLineas.Columns
+            If Not .Contains("ID_Linea") Then .Add("ID_Linea", GetType(Object))
+            If Not .Contains("ID_PedidoCompra") Then .Add("ID_PedidoCompra", GetType(Object))
+            If Not .Contains("NumeroOrden") Then .Add("NumeroOrden", GetType(Integer))
+            If Not .Contains("ID_Articulo") Then .Add("ID_Articulo", GetType(Object))
+            If Not .Contains("Descripcion") Then .Add("Descripcion", GetType(String))
+            If Not .Contains("CantidadSolicitada") Then .Add("CantidadSolicitada", GetType(Decimal))
+            If Not .Contains("PrecioUnitario") Then .Add("PrecioUnitario", GetType(Decimal))
+            If Not .Contains("Descuento") Then .Add("Descuento", GetType(Decimal))
+
+            ' --- COLUMNAS IVA Y VIRTUALES ---
+            If Not .Contains("PorcentajeIVA") Then .Add("PorcentajeIVA", GetType(Decimal))
+            If Not .Contains("PrecioConIVA") Then .Add("PrecioConIVA", GetType(Decimal))
+            If Not .Contains("Total") Then .Add("Total", GetType(Decimal))
+            If Not .Contains("TotalConIVA") Then .Add("TotalConIVA", GetType(Decimal))
+        End With
+    End Sub
+
+    Private Function GenerarProximoNumeroPedido() As String
+        Dim prefijo As String = "PEC-"
+        Dim nuevoNumero As String = $"{prefijo}001"
+        Try
+            Dim sql As String = "SELECT NumeroPedidoCompra FROM PedidosCompra WHERE NumeroPedidoCompra LIKE @patron ORDER BY NumeroPedidoCompra DESC LIMIT 1"
+
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+
+            Using cmd As New SQLiteCommand(sql, c)
+                cmd.Parameters.AddWithValue("@patron", prefijo & "%")
+                Dim resultado = cmd.ExecuteScalar()
+                If resultado IsNot Nothing AndAlso Not IsDBNull(resultado) Then
+                    Dim partes As String() = resultado.ToString().Split("-"c)
+                    If partes.Length >= 2 AndAlso IsNumeric(partes(1)) Then
+                        nuevoNumero = $"{prefijo}{(CInt(partes(1)) + 1).ToString("D3")}"
+                    End If
+                End If
+            End Using
+        Catch
+            nuevoNumero = $"PEC-{DateTime.Now:HHmmss}"
+        End Try
+        Return nuevoNumero
+    End Function
+#End Region
+
+#Region "5. Persistencia (Base de Datos - CRUD)"
+    Private Sub CargarPedido(numeroPedido As String)
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
 
-            ' Usamos una transacción por si falla algo en las líneas, que no se guarde el pedido a medias
-            Using tr As SQLiteTransaction = c.BeginTransaction()
-                Try
-                    ' 1. Guardar la Cabecera (PedidosCompra)
-                    Dim sqlCabecera As String = "INSERT OR REPLACE INTO PedidosCompra (NumeroPedido, ID_Proveedor, Fecha, Estado, Total, Observaciones) " &
-                                                "VALUES (@num, @prov, @fecha, @estado, @total, @obs)"
-                    Using cmd As New SQLiteCommand(sqlCabecera, c, tr)
-                        cmd.Parameters.AddWithValue("@num", txtNumeroPedido.Text)
-                        cmd.Parameters.AddWithValue("@prov", cboProveedor.SelectedValue)
-                        cmd.Parameters.AddWithValue("@fecha", dtpFecha.Value.ToString("yyyy-MM-dd"))
-                        cmd.Parameters.AddWithValue("@estado", cboEstado.Text)
-                        cmd.Parameters.AddWithValue("@total", CDec(lblTotalPedido.Tag))
-                        cmd.Parameters.AddWithValue("@obs", txtObservaciones.Text.Trim())
-                        cmd.ExecuteNonQuery()
-                    End Using
+            ' A. CARGAR CABECERA - Usamos ID_PedidoCompra como clave interna,
+            '    pero permitimos buscar por NumeroPedidoCompra (el que ve el usuario)
+            Dim sqlCab As String = "SELECT P.*, Pr.NombreFiscal AS NombreProveedor, V.Nombre AS NombreComprador " &
+                                   "FROM PedidosCompra P " &
+                                   "LEFT JOIN Proveedores Pr ON P.ID_Proveedor = Pr.CodigoProveedor " &
+                                   "LEFT JOIN Vendedores V ON P.ID_Comprador = V.ID_Vendedor " &
+                                   "WHERE P.NumeroPedidoCompra = @num"
 
-                    ' 2. Borrar líneas anteriores si estamos sobreescribiendo el mismo pedido
-                    Using cmdDel As New SQLiteCommand("DELETE FROM LineasPedidoCompra WHERE NumeroPedido=@num", c, tr)
-                        cmdDel.Parameters.AddWithValue("@num", txtNumeroPedido.Text)
-                        cmdDel.ExecuteNonQuery()
-                    End Using
+            Dim idPedidoInterno As Integer = 0
 
-                    ' 3. Guardar las Líneas (LineasPedidoCompra)
-                    Dim sqlLineas As String = "INSERT INTO LineasPedidoCompra (NumeroPedido, ID_Articulo, Descripcion, Cantidad, PrecioCosto, Total) " &
-                                              "VALUES (@num, @art, @desc, @cant, @precio, @total)"
+            Using cmd As New SQLiteCommand(sqlCab, c)
+                cmd.Parameters.AddWithValue("@num", numeroPedido)
+                Using r = cmd.ExecuteReader()
+                    If r.Read() Then
+                        _numeroPedidoActual = numeroPedido
+                        idPedidoInterno = Convert.ToInt32(r("ID_PedidoCompra"))
 
-                    Using cmdLin As New SQLiteCommand(sqlLineas, c, tr)
-                        For Each row As DataGridViewRow In dgvLineas.Rows
-                            If Not row.IsNewRow Then
-                                cmdLin.Parameters.Clear()
-                                cmdLin.Parameters.AddWithValue("@num", txtNumeroPedido.Text)
-                                cmdLin.Parameters.AddWithValue("@art", If(row.Cells("ID_Articulo").Value, 0))
-                                cmdLin.Parameters.AddWithValue("@desc", If(row.Cells("Descripcion").Value, ""))
-                                cmdLin.Parameters.AddWithValue("@cant", CDec(If(row.Cells("Cantidad").Value, 0)))
-                                cmdLin.Parameters.AddWithValue("@precio", CDec(If(row.Cells("Precio").Value, 0)))
-                                cmdLin.Parameters.AddWithValue("@total", CDec(If(row.Cells("Total").Value, 0)))
-                                cmdLin.ExecuteNonQuery()
-                            End If
-                        Next
-                    End Using
+                        TextBoxPedido.Text = r("NumeroPedidoCompra").ToString()
+                        TextBoxFecha.Text = If(IsDBNull(r("Fecha")), "", Convert.ToDateTime(r("Fecha")).ToShortDateString())
+                        If Not IsDBNull(r("FechaEntregaPrevista")) Then DateTimePickerFecha.Value = Convert.ToDateTime(r("FechaEntregaPrevista"))
 
-                    tr.Commit()
-                    MessageBox.Show("Pedido guardado con éxito.", "Guardado", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                        TextBoxObservaciones.Text = If(IsDBNull(r("Observaciones")), "", r("Observaciones").ToString())
+                        cboEstado.Text = If(IsDBNull(r("Estado")), "Pendiente", r("Estado").ToString())
+                        TextBoxIdProveedor.Text = r("ID_Proveedor").ToString()
+                        TextBoxProveedor.Text = If(IsDBNull(r("NombreProveedor")), "", r("NombreProveedor").ToString())
+                        TextBoxIdComprador.Text = If(IsDBNull(r("ID_Comprador")), "", r("ID_Comprador").ToString())
+                        TextBoxComprador.Text = If(IsDBNull(r("NombreComprador")), "", r("NombreComprador").ToString())
 
-                    ' Bloqueamos el número para que si le da a guardar otra vez, se actualice en vez de crear otro
-                Catch ex As Exception
-                    tr.Rollback()
-                    Throw ex
-                End Try
+                        Dim idPago = r("ID_FormaPago")
+                        If Not IsDBNull(idPago) Then cboFormaPago.SelectedValue = Convert.ToInt32(idPago) Else cboFormaPago.SelectedIndex = -1
+                    Else
+                        MessageBox.Show("Pedido de compra no encontrado.") : Return
+                    End If
+                End Using
+            End Using
+
+            ' B. CARGAR LÍNEAS
+            Dim sqlLin As String = "SELECT * FROM LineasPedidoCompra WHERE ID_PedidoCompra = @id ORDER BY NumeroOrden ASC"
+            Using cmd As New SQLiteCommand(sqlLin, c)
+                cmd.Parameters.AddWithValue("@id", idPedidoInterno)
+                Dim da As New SQLiteDataAdapter(cmd)
+                _dtLineas = New DataTable()
+                da.Fill(_dtLineas)
+                ConfigurarEstructuraDataTable()
+
+                ' Recalcular IVA/totales al vuelo
+                For Each row As DataRow In _dtLineas.Rows
+                    Dim cant As Decimal = If(IsDBNull(row("CantidadSolicitada")), 0, Convert.ToDecimal(row("CantidadSolicitada")))
+                    Dim prec As Decimal = If(IsDBNull(row("PrecioUnitario")), 0, Convert.ToDecimal(row("PrecioUnitario")))
+                    Dim dto As Decimal = If(IsDBNull(row("Descuento")), 0, Convert.ToDecimal(row("Descuento")))
+                    Dim iva As Decimal = If(IsDBNull(row("PorcentajeIVA")), 21, Convert.ToDecimal(row("PorcentajeIVA")))
+
+                    row("PorcentajeIVA") = iva
+                    row("PrecioConIVA") = prec * (1 + (iva / 100))
+
+                    Dim totalSinIva As Decimal = (cant * prec) * (1 - (dto / 100))
+                    row("Total") = totalSinIva
+                    row("TotalConIVA") = totalSinIva * (1 + (iva / 100))
+                Next
+
+                DataGridView1.DataSource = _dtLineas
+                CalcularTotalesGenerales()
             End Using
 
         Catch ex As Exception
-            MessageBox.Show("Error al guardar el pedido: " & ex.Message, "Error SQL", MessageBoxButtons.OK, MessageBoxIcon.Error)
+            MessageBox.Show("Error al cargar: " & ex.Message)
         End Try
     End Sub
 
+    Private Sub GuardarPedido()
+        If String.IsNullOrWhiteSpace(TextBoxIdProveedor.Text) Then MessageBox.Show("Falta el Proveedor") : Return
+
+        Dim esNuevo As Boolean = String.IsNullOrEmpty(_numeroPedidoActual)
+        If esNuevo Then
+            TextBoxPedido.Text = GenerarProximoNumeroPedido()
+            _numeroPedidoActual = TextBoxPedido.Text
+        End If
+
+        Dim c = ConexionBD.GetConnection()
+        Dim trans As SQLiteTransaction = Nothing
+        Try
+            If c.State <> ConnectionState.Open Then c.Open()
+            trans = c.BeginTransaction()
+
+            ' 0. Calcular sumas para la cabecera
+            Dim sumaBase As Decimal = 0
+            Dim sumaIva As Decimal = 0
+            For Each r As DataRow In _dtLineas.Rows
+                If r.RowState <> DataRowState.Deleted Then
+                    Dim tot As Decimal = 0 : Decimal.TryParse(r("Total").ToString(), tot)
+                    Dim ivaLinea As Decimal = 21 : Decimal.TryParse(r("PorcentajeIVA").ToString(), ivaLinea)
+                    sumaBase += tot
+                    sumaIva += tot * (ivaLinea / 100)
+                End If
+            Next
+
+            ' 1. Guardar Cabecera 
+            Dim idFormaPago As Object = If(cboFormaPago.SelectedValue IsNot Nothing AndAlso cboFormaPago.SelectedIndex <> -1, cboFormaPago.SelectedValue, DBNull.Value)
+            Dim idComp As Object = If(IsNumeric(TextBoxIdComprador.Text) AndAlso Val(TextBoxIdComprador.Text) > 0, Convert.ToInt32(TextBoxIdComprador.Text), DBNull.Value)
+
+            Dim idPedidoInterno As Long = 0
+            Dim sql As String = ""
+
+            If esNuevo Then
+                sql = "INSERT INTO PedidosCompra (NumeroPedidoCompra, ID_Proveedor, Fecha, FechaEntregaPrevista, Observaciones, Estado, ID_FormaPago, ID_Comprador, BaseImponible, ImporteIVA, Total) " &
+                      "VALUES (@num, @prov, @fecha, @fechaEnt, @obs, @est, @formaPago, @comp, @base, @iva, @total); SELECT last_insert_rowid();"
+            Else
+                sql = "UPDATE PedidosCompra SET ID_Proveedor=@prov, Fecha=@fecha, FechaEntregaPrevista=@fechaEnt, Observaciones=@obs, Estado=@est, ID_FormaPago=@formaPago, ID_Comprador=@comp, BaseImponible=@base, ImporteIVA=@iva, Total=@total " &
+                      "WHERE NumeroPedidoCompra = @num"
+            End If
+
+            Using cmd As New SQLiteCommand(sql, c)
+                cmd.Transaction = trans
+                cmd.Parameters.AddWithValue("@num", _numeroPedidoActual)
+                cmd.Parameters.AddWithValue("@prov", TextBoxIdProveedor.Text.Trim())
+                cmd.Parameters.AddWithValue("@comp", idComp)
+
+                ' --- FECHAS ---
+                Dim fecha As DateTime
+                If DateTime.TryParse(TextBoxFecha.Text, fecha) Then
+                    cmd.Parameters.AddWithValue("@fecha", fecha.ToString("yyyy-MM-dd HH:mm:ss"))
+                Else
+                    cmd.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                End If
+
+                cmd.Parameters.AddWithValue("@fechaEnt", DateTimePickerFecha.Value.ToString("yyyy-MM-dd HH:mm:ss"))
+                cmd.Parameters.AddWithValue("@obs", TextBoxObservaciones.Text.Trim())
+                cmd.Parameters.AddWithValue("@est", cboEstado.Text.Trim())
+                cmd.Parameters.AddWithValue("@formaPago", idFormaPago)
+
+                cmd.Parameters.AddWithValue("@base", sumaBase)
+                cmd.Parameters.AddWithValue("@iva", sumaIva)
+                cmd.Parameters.AddWithValue("@total", sumaBase + sumaIva)
+
+                If esNuevo Then
+                    idPedidoInterno = Convert.ToInt64(cmd.ExecuteScalar())
+                Else
+                    cmd.ExecuteNonQuery()
+                End If
+            End Using
+
+            ' Si es edición, recuperamos el ID interno
+            If Not esNuevo Then
+                Using cmdId As New SQLiteCommand("SELECT ID_PedidoCompra FROM PedidosCompra WHERE NumeroPedidoCompra = @num", c)
+                    cmdId.Transaction = trans
+                    cmdId.Parameters.AddWithValue("@num", _numeroPedidoActual)
+                    idPedidoInterno = Convert.ToInt64(cmdId.ExecuteScalar())
+                End Using
+            End If
+
+            ' 2. Borrar líneas eliminadas
+            For Each idDel In _idsParaBorrar
+                Using cmdDel As New SQLiteCommand("DELETE FROM LineasPedidoCompra WHERE ID_Linea = @id", c)
+                    cmdDel.Transaction = trans : cmdDel.Parameters.AddWithValue("@id", idDel) : cmdDel.ExecuteNonQuery()
+                End Using
+            Next
+            _idsParaBorrar.Clear()
+
+            ' 3. Guardar Líneas
+            Dim orden As Integer = 1
+            For Each row As DataRow In _dtLineas.Rows
+                If row.RowState = DataRowState.Deleted Then Continue For
+
+                Dim idLin = row("ID_Linea")
+                Dim idArt As Object = If(IsNumeric(row("ID_Articulo")) AndAlso Val(row("ID_Articulo")) > 0, Convert.ToInt32(row("ID_Articulo")), DBNull.Value)
+                Dim sqlLine As String = ""
+
+                If IsDBNull(idLin) OrElse Not IsNumeric(idLin) OrElse Val(idLin) = 0 Then
+                    sqlLine = "INSERT INTO LineasPedidoCompra (ID_PedidoCompra, NumeroOrden, ID_Articulo, Descripcion, CantidadSolicitada, PrecioUnitario, Descuento, PorcentajeIVA, Total) " &
+                              "VALUES (@idPed, @ord, @art, @desc, @cant, @prec, @dcto, @iva, @tot)"
+                Else
+                    sqlLine = "UPDATE LineasPedidoCompra SET NumeroOrden=@ord, ID_Articulo=@art, Descripcion=@desc, CantidadSolicitada=@cant, PrecioUnitario=@prec, Descuento=@dcto, PorcentajeIVA=@iva, Total=@tot WHERE ID_Linea=@id"
+                End If
+
+                Using cmdL As New SQLiteCommand(sqlLine, c)
+                    cmdL.Transaction = trans
+                    cmdL.Parameters.AddWithValue("@idPed", idPedidoInterno)
+                    cmdL.Parameters.AddWithValue("@ord", orden)
+                    cmdL.Parameters.AddWithValue("@art", idArt)
+                    cmdL.Parameters.AddWithValue("@desc", If(IsDBNull(row("Descripcion")), "", row("Descripcion")))
+                    cmdL.Parameters.AddWithValue("@cant", row("CantidadSolicitada"))
+                    cmdL.Parameters.AddWithValue("@prec", row("PrecioUnitario"))
+                    cmdL.Parameters.AddWithValue("@dcto", row("Descuento"))
+                    cmdL.Parameters.AddWithValue("@iva", If(IsDBNull(row("PorcentajeIVA")), 21, row("PorcentajeIVA")))
+                    cmdL.Parameters.AddWithValue("@tot", row("Total"))
+                    If sqlLine.Contains("WHERE") Then cmdL.Parameters.AddWithValue("@id", idLin)
+                    cmdL.ExecuteNonQuery()
+                End Using
+                orden += 1
+            Next
+
+            trans.Commit()
+            MessageBox.Show("Guardado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            CargarPedido(_numeroPedidoActual)
+
+        Catch ex As Exception
+            If trans IsNot Nothing Then trans.Rollback()
+            MessageBox.Show("Error al guardar: " & ex.Message)
+        End Try
+    End Sub
+
+    Private Function ObtenerUltimoNumeroPedido() As String
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+            Dim cmd As New SQLiteCommand("SELECT MAX(NumeroPedidoCompra) FROM PedidosCompra", c)
+            Dim r = cmd.ExecuteScalar()
+            Return If(r Is Nothing OrElse IsDBNull(r), "", r.ToString())
+        Catch
+            Return ""
+        End Try
+    End Function
+#End Region
+
+#Region "7. Manejadores de Eventos (Botones y Grid)"
+
+    Private Sub ButtonGuardar_Click(sender As Object, e As EventArgs) Handles ButtonGuardar.Click
+        GuardarPedido()
+    End Sub
+
+    Private Sub ButtonNuevoPed_Click(sender As Object, e As EventArgs) Handles ButtonNuevoPed.Click
+        LimpiarFormulario()
+    End Sub
+
+    Private Sub ButtonBorrar_Click(sender As Object, e As EventArgs) Handles ButtonBorrar.Click
+        If String.IsNullOrEmpty(_numeroPedidoActual) Then Return
+        If MessageBox.Show("¿Seguro que deseas eliminar este pedido de compra?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) = DialogResult.Yes Then
+            Try
+                Dim c = ConexionBD.GetConnection()
+                If c.State <> ConnectionState.Open Then c.Open()
+
+                ' Obtenemos el id interno
+                Dim idInterno As Integer = 0
+                Using cmdId As New SQLiteCommand("SELECT ID_PedidoCompra FROM PedidosCompra WHERE NumeroPedidoCompra=@num", c)
+                    cmdId.Parameters.AddWithValue("@num", _numeroPedidoActual)
+                    Dim rid = cmdId.ExecuteScalar()
+                    If rid IsNot Nothing AndAlso Not IsDBNull(rid) Then idInterno = Convert.ToInt32(rid)
+                End Using
+
+                If idInterno > 0 Then
+                    Using cmd As New SQLiteCommand("DELETE FROM LineasPedidoCompra WHERE ID_PedidoCompra=@id; DELETE FROM PedidosCompra WHERE ID_PedidoCompra=@id;", c)
+                        cmd.Parameters.AddWithValue("@id", idInterno)
+                        cmd.ExecuteNonQuery()
+                    End Using
+                End If
+                LimpiarFormulario()
+            Catch ex As Exception
+                MessageBox.Show(ex.Message)
+            End Try
+        End If
+    End Sub
+
+    Private Sub btnBuscarPedido_Click(sender As Object, e As EventArgs) Handles btnBuscarPedido.Click
+        Dim frmBuscar As New FrmBuscador()
+        frmBuscar.TablaABuscar = "PedidosCompra"
+        If frmBuscar.ShowDialog() = DialogResult.OK Then
+            CargarPedido(frmBuscar.Resultado)
+        End If
+    End Sub
+
+    Private Sub Navegar(direccion As String)
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+            Dim sql As String = If(direccion = "ANT",
+                                   "SELECT MAX(NumeroPedidoCompra) FROM PedidosCompra WHERE NumeroPedidoCompra < @act",
+                                   "SELECT MIN(NumeroPedidoCompra) FROM PedidosCompra WHERE NumeroPedidoCompra > @act")
+
+            If String.IsNullOrEmpty(_numeroPedidoActual) And direccion = "ANT" Then
+                sql = "SELECT MAX(NumeroPedidoCompra) FROM PedidosCompra"
+            End If
+
+            Using cmd As New SQLiteCommand(sql, c)
+                cmd.Parameters.AddWithValue("@act", _numeroPedidoActual)
+                Dim res = cmd.ExecuteScalar()
+                If res IsNot Nothing AndAlso Not IsDBNull(res) Then CargarPedido(res.ToString())
+            End Using
+        Catch ex As Exception
+            MessageBox.Show(ex.Message)
+        End Try
+    End Sub
+
+    Private Sub ButtonAnterior_Click(sender As Object, e As EventArgs) Handles ButtonAnterior.Click
+        Navegar("ANT")
+    End Sub
+
+    Private Sub ButtonSiguiente_Click(sender As Object, e As EventArgs) Handles ButtonSiguiente.Click
+        Navegar("SIG")
+    End Sub
+
+    Private Sub ButtonNuevaLinea_Click(sender As Object, e As EventArgs) Handles ButtonNuevaLinea.Click
+        If _dtLineas Is Nothing Then
+            _dtLineas = New DataTable()
+            ConfigurarEstructuraDataTable()
+        End If
+
+        Dim fila = _dtLineas.NewRow()
+        fila("NumeroOrden") = _dtLineas.Rows.Count + 1
+        fila("CantidadSolicitada") = 1
+        fila("PrecioUnitario") = 0
+        fila("Descuento") = 0
+        fila("PorcentajeIVA") = 21
+        fila("Total") = 0
+        _dtLineas.Rows.Add(fila)
+
+        If DataGridView1.Rows.Count > 0 Then
+            DataGridView1.CurrentCell = DataGridView1.Rows(DataGridView1.Rows.Count - 1).Cells("ID_Articulo")
+            DataGridView1.BeginEdit(True)
+        End If
+    End Sub
+
+    Private Sub ButtonBorrarLineas_Click(sender As Object, e As EventArgs) Handles ButtonBorrarLineas.Click
+        If DataGridView1.SelectedRows.Count = 0 Then Return
+        For Each f As DataGridViewRow In DataGridView1.SelectedRows
+            If Not f.IsNewRow Then
+                Dim idVal = f.Cells("ID_Linea").Value
+                If IsNumeric(idVal) AndAlso Val(idVal) > 0 Then _idsParaBorrar.Add(CInt(idVal))
+                DataGridView1.Rows.Remove(f)
+            End If
+        Next
+        CalcularTotalesGenerales()
+    End Sub
+
+    ' EL FRENO MÁGICO
+    Private Sub DataGridView1_CellBeginEdit(sender As Object, e As DataGridViewCellCancelEventArgs) Handles DataGridView1.CellBeginEdit
+        Dim colName = DataGridView1.Columns(e.ColumnIndex).Name
+        If colName = "ID_Articulo" Then
+            Dim celda = DataGridView1.Rows(e.RowIndex).Cells(e.ColumnIndex)
+            celda.Tag = celda.Value?.ToString()
+        End If
+    End Sub
+
+    Private Sub DataGridView1_CellEndEdit(sender As Object, e As DataGridViewCellEventArgs) Handles DataGridView1.CellEndEdit
+        Dim fila = DataGridView1.Rows(e.RowIndex)
+        Dim colName = DataGridView1.Columns(e.ColumnIndex).Name
+
+        ' A. Artículo
+        If colName = "ID_Articulo" Then
+            Dim idArt As String = fila.Cells("ID_Articulo").Value?.ToString()
+            Dim idAntiguo As String = fila.Cells("ID_Articulo").Tag?.ToString()
+
+            If idArt = idAntiguo Then Return
+
+            If String.IsNullOrWhiteSpace(idArt) Then
+                fila.Cells("Descripcion").Value = ""
+                fila.Cells("PrecioUnitario").Value = 0
+                fila.Cells("PorcentajeIVA").Value = 21
+                fila.Tag = Nothing
+                Return
+            End If
+
+            Try
+                Dim c = ConexionBD.GetConnection()
+                If c.State <> ConnectionState.Open Then c.Open()
+
+                ' IMPORTANTE: En compras usamos PrecioCoste (no PrecioVenta)
+                Dim sql As String = "SELECT Descripcion, PrecioCoste, StockActual, TipoIVA FROM Articulos WHERE ID_Articulo = @id"
+                Using cmd As New SQLiteCommand(sql, c)
+                    cmd.Parameters.AddWithValue("@id", idArt)
+                    Using r = cmd.ExecuteReader()
+                        If r.Read() Then
+                            fila.Cells("Descripcion").Value = r("Descripcion").ToString()
+                            fila.Cells("PrecioUnitario").Value = If(IsDBNull(r("PrecioCoste")), 0, Convert.ToDecimal(r("PrecioCoste")))
+                            fila.Cells("PorcentajeIVA").Value = If(IsDBNull(r("TipoIVA")), 21, Convert.ToDecimal(r("TipoIVA")))
+                            If Not IsDBNull(r("StockActual")) Then fila.Tag = Convert.ToDecimal(r("StockActual"))
+                            If IsDBNull(fila.Cells("CantidadSolicitada").Value) OrElse Val(fila.Cells("CantidadSolicitada").Value) = 0 Then fila.Cells("CantidadSolicitada").Value = 1
+                            fila.Cells("ID_Articulo").Tag = idArt
+                        Else
+                            MessageBox.Show("Artículo no encontrado", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                        End If
+                    End Using
+                End Using
+            Catch ex As Exception
+            End Try
+        End If
+
+        ' B. Cálculos
+        If colName = "CantidadSolicitada" Or colName = "PrecioUnitario" Or colName = "Descuento" Or colName = "PorcentajeIVA" Then
+            Dim cant As Decimal = 0, prec As Decimal = 0, dto As Decimal = 0, iva As Decimal = 21
+            Decimal.TryParse(fila.Cells("CantidadSolicitada").Value?.ToString(), cant)
+            Decimal.TryParse(fila.Cells("PrecioUnitario").Value?.ToString(), prec)
+            Decimal.TryParse(fila.Cells("Descuento").Value?.ToString(), dto)
+            Decimal.TryParse(fila.Cells("PorcentajeIVA").Value?.ToString(), iva)
+
+            Dim precioConIva As Decimal = prec * (1 + (iva / 100))
+            Dim totalSinIva As Decimal = (cant * prec) * (1 - (dto / 100))
+            Dim totalConIva As Decimal = totalSinIva * (1 + (iva / 100))
+
+            fila.Cells("Total").Value = totalSinIva
+            fila.Cells("TotalConIVA").Value = totalConIva
+
+            CalcularTotalesGenerales()
+        End If
+    End Sub
+
+    ' INFO DE STOCK EN TIEMPO REAL (En compras indica cuánto quedará TRAS LA ENTRADA)
+    Private Sub DataGridView1_SelectionChanged(sender As Object, e As EventArgs) Handles DataGridView1.SelectionChanged
+        If LabelStock Is Nothing Then Return
+        If DataGridView1.CurrentRow Is Nothing OrElse DataGridView1.CurrentRow.IsNewRow Then
+            LabelStock.Text = "Stock disponible: -"
+            LabelStock.ForeColor = Color.FromArgb(170, 175, 180)
+            Return
+        End If
+
+        Try
+            Dim idCelda As Object = DataGridView1.CurrentRow.Cells("ID_Articulo").Value
+            If idCelda IsNot Nothing AndAlso Not DBNull.Value.Equals(idCelda) Then
+                Dim idArticulo As Integer = Convert.ToInt32(idCelda)
+
+                Dim cantidadEnLinea As Decimal = 0
+                Dim cantCelda As Object = DataGridView1.CurrentRow.Cells("CantidadSolicitada").Value
+                If cantCelda IsNot Nothing AndAlso Not DBNull.Value.Equals(cantCelda) Then
+                    cantidadEnLinea = Convert.ToDecimal(cantCelda)
+                End If
+
+                Dim stockActual As Decimal = ConsultarStock(idArticulo)
+                Dim stockTrasCompra As Decimal = stockActual + cantidadEnLinea
+
+                LabelStock.Text = $"Stock actual: {stockActual} (Tendrás: {stockTrasCompra} tras la recepción)"
+                LabelStock.ForeColor = Color.FromArgb(40, 180, 90)
+                LabelStock.Font = New Font("Segoe UI", 10.5F, FontStyle.Bold)
+            End If
+        Catch ex As Exception
+            LabelStock.Text = "Stock disponible: -"
+        End Try
+    End Sub
+
+    Private Function ConsultarStock(idArticulo As Integer) As Decimal
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+            Dim cmd As New SQLiteCommand("SELECT StockActual FROM Articulos WHERE ID_Articulo = @id", c)
+            cmd.Parameters.AddWithValue("@id", idArticulo)
+            Dim resultado As Object = cmd.ExecuteScalar()
+            If resultado IsNot Nothing AndAlso Not DBNull.Value.Equals(resultado) Then Return Convert.ToDecimal(resultado)
+        Catch
+        End Try
+        Return 0
+    End Function
+
+    Private Sub DataGridView1_RowsRemoved(sender As Object, e As DataGridViewRowsRemovedEventArgs) Handles DataGridView1.RowsRemoved
+        CalcularTotalesGenerales()
+    End Sub
+
+    Private Sub TextBoxIdProveedor_Leave(sender As Object, e As EventArgs) Handles TextBoxIdProveedor.Leave
+        If String.IsNullOrWhiteSpace(TextBoxIdProveedor.Text) Then
+            TextBoxProveedor.Text = ""
+            Return
+        End If
+
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+
+            Dim cmd As New SQLiteCommand("SELECT NombreFiscal FROM Proveedores WHERE CodigoProveedor=@id", c)
+            cmd.Parameters.AddWithValue("@id", TextBoxIdProveedor.Text.Trim())
+
+            Using r = cmd.ExecuteReader()
+                If r.Read() Then
+                    TextBoxProveedor.Text = r("NombreFiscal").ToString()
+                Else
+                    Dim respuesta As DialogResult = MessageBox.Show(
+                        "El código de proveedor '" & TextBoxIdProveedor.Text & "' no existe." & vbCrLf & vbCrLf &
+                        "¿Deseas crear esta nueva ficha de proveedor ahora?",
+                        "Proveedor no encontrado",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question)
+
+                    If respuesta = DialogResult.Yes Then
+                        Dim codigoFaltante As String = TextBoxIdProveedor.Text.Trim()
+                        TextBoxIdProveedor.Text = ""
+                        TextBoxProveedor.Text = ""
+
+                        Dim frm As New FrmProveedorDetalle()
+                        frm.CodigoProveedorSeleccionado = codigoFaltante
+                        frm.ShowDialog()
+                        TextBoxIdProveedor.Focus()
+                    Else
+                        TextBoxIdProveedor.Text = ""
+                        TextBoxProveedor.Text = ""
+                        TextBoxIdProveedor.Focus()
+                    End If
+                End If
+            End Using
+        Catch ex As Exception
+            MessageBox.Show("Error al buscar proveedor: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+        End Try
+    End Sub
+
+    Private Sub TextBoxIdComprador_Leave(sender As Object, e As EventArgs) Handles TextBoxIdComprador.Leave
+        If String.IsNullOrWhiteSpace(TextBoxIdComprador.Text) Then TextBoxComprador.Text = "" : Return
+        Try
+            Dim c = ConexionBD.GetConnection()
+            If c.State <> ConnectionState.Open Then c.Open()
+            Dim cmd As New SQLiteCommand("SELECT Nombre FROM Vendedores WHERE ID_Vendedor=@id", c)
+            cmd.Parameters.AddWithValue("@id", Val(TextBoxIdComprador.Text))
+            Dim r = cmd.ExecuteScalar()
+            TextBoxComprador.Text = If(r IsNot Nothing, r.ToString(), "NO EXISTE")
+        Catch
+        End Try
+    End Sub
+#End Region
+
+#Region "Auto-Organización Visual (Pixel-Perfect)"
+    Private Sub ReorganizarControlesAutomaticamente()
+        For Each ctrl As Control In Me.Controls : ctrl.Anchor = AnchorStyles.Top Or AnchorStyles.Left : Next
+
+        Dim margenIzq As Integer = 30
+        Dim anchoForm As Integer = Me.ClientSize.Width
+        Dim altoForm As Integer = Me.ClientSize.Height
+
+        Dim col1_X As Integer = margenIzq
+        Dim col2_X As Integer = 190
+        Dim col3_X As Integer = 560
+        Dim col4_X As Integer = 750
+
+        Dim yFila1 As Integer = 30
+        Dim yFila2 As Integer = 55
+        Dim yFila3 As Integer = 95
+        Dim yFila4 As Integer = 120
+        Dim yFila5 As Integer = 160
+        Dim yFila6 As Integer = 185
+
+        For Each ctrl As Control In Me.Controls
+            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" Then
+                ctrl.BringToFront()
+                Dim texto As String = ctrl.Text.Trim().ToLower()
+                Select Case texto
+                    Case "pedido" : ctrl.Location = New Point(col1_X, yFila1)
+                    Case "proveedor" : ctrl.Location = New Point(col2_X, yFila1)
+                    Case "fecha" : ctrl.Location = New Point(col3_X, yFila1)
+                    Case "fecha entrega" : ctrl.Location = New Point(col4_X, yFila1)
+                    Case "comprador" : ctrl.Location = New Point(col1_X, yFila3)
+                    Case "observaciones" : ctrl.Location = New Point(col2_X, yFila3)
+                    Case "estado" : ctrl.Location = New Point(col3_X, yFila3)
+                End Select
+            End If
+        Next
+
+        TextBoxPedido.Bounds = New Rectangle(col1_X, yFila2, 105, 25)
+        btnBuscarPedido.Bounds = New Rectangle(col1_X + 110, yFila2, 30, 25)
+        TextBoxIdProveedor.Bounds = New Rectangle(col2_X, yFila2, 60, 25)
+        TextBoxProveedor.Bounds = New Rectangle(col2_X + 70, yFila2, 280, 25)
+        TextBoxFecha.Bounds = New Rectangle(col3_X, yFila2, 140, 25)
+        If DateTimePickerFecha IsNot Nothing Then DateTimePickerFecha.Bounds = New Rectangle(col4_X, yFila2, 140, 25)
+
+        TextBoxIdComprador.Bounds = New Rectangle(col1_X, yFila4, 50, 25)
+        TextBoxComprador.Bounds = New Rectangle(col1_X + 55, yFila4, 85, 25)
+        TextBoxObservaciones.Bounds = New Rectangle(col2_X, yFila4, 350, 25)
+        cboEstado.Bounds = New Rectangle(col3_X, yFila4, 330, 25)
+
+        lblFormaPago.Location = New Point(col1_X, yFila5)
+        cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 300, 25)
+        cboFormaPago.Font = New Font("Segoe UI", 10.5F)
+
+        Dim lineaDivisoria As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaDivisoria")
+        If lineaDivisoria Is Nothing Then
+            lineaDivisoria = New Label() With {.Name = "LineaDivisoria", .BackColor = Color.FromArgb(120, 130, 140), .Height = 2}
+            Me.Controls.Add(lineaDivisoria)
+        End If
+
+        Dim yTabla As Integer = 240
+        lineaDivisoria.Bounds = New Rectangle(margenIzq, yTabla - 20, anchoForm - (margenIzq * 2), 2)
+        lineaDivisoria.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        lineaDivisoria.BringToFront()
+
+        Dim altoTabla As Integer = altoForm - yTabla - 140
+        DataGridView1.Bounds = New Rectangle(margenIzq, yTabla, anchoForm - (margenIzq * 2), altoTabla)
+        DataGridView1.BackgroundColor = Me.BackColor
+        DataGridView1.BorderStyle = BorderStyle.None
+
+        Dim xDerecha As Integer = DataGridView1.Right
+        Dim yTotales As Integer = DataGridView1.Bottom + 10
+
+        Dim panelTotales As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "PanelTotalesResumen")
+        If panelTotales Is Nothing Then
+            panelTotales = New Label() With {.Name = "PanelTotalesResumen", .BackColor = Color.FromArgb(25, 30, 40)}
+            Me.Controls.Add(panelTotales)
+            panelTotales.SendToBack()
+        End If
+        panelTotales.Bounds = New Rectangle(xDerecha - 320, yTotales, 150, 115)
+        panelTotales.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+
+        TextBoxBase.Bounds = New Rectangle(xDerecha - 140, yTotales + 10, 120, 25)
+        TextBoxIva.Bounds = New Rectangle(xDerecha - 140, yTotales + 40, 120, 25)
+        LabelBase.Bounds = New Rectangle(xDerecha - 300, yTotales + 10, 150, 25)
+        LabelIva.Bounds = New Rectangle(xDerecha - 300, yTotales + 40, 150, 25)
+
+        LabelBase.BackColor = Color.FromArgb(25, 30, 40) : LabelIva.BackColor = Color.FromArgb(25, 30, 40)
+        LabelBase.TextAlign = ContentAlignment.MiddleRight : LabelIva.TextAlign = ContentAlignment.MiddleRight
+        TextBoxBase.TextAlign = HorizontalAlignment.Right : TextBoxIva.TextAlign = HorizontalAlignment.Right
+
+        TextBoxBase.BackColor = Color.FromArgb(25, 30, 40) : TextBoxBase.ForeColor = Color.White : TextBoxBase.BorderStyle = BorderStyle.None
+        TextBoxIva.BackColor = Color.FromArgb(25, 30, 40) : TextBoxIva.ForeColor = Color.White : TextBoxIva.BorderStyle = BorderStyle.None
+
+        Dim lineaTotal As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaTotales")
+        If lineaTotal Is Nothing Then
+            lineaTotal = New Label() With {.Name = "LineaTotales", .BackColor = Color.FromArgb(100, 100, 100), .Height = 1}
+            Me.Controls.Add(lineaTotal)
+        End If
+        lineaTotal.Bounds = New Rectangle(xDerecha - 300, yTotales + 70, 280, 1)
+        lineaTotal.BringToFront()
+
+        Dim colorAcento As Color = Color.FromArgb(0, 150, 255)
+        If Label7 IsNot Nothing Then
+            Label7.Bounds = New Rectangle(xDerecha - 300, yTotales + 80, 150, 30)
+            Label7.BackColor = Color.FromArgb(25, 30, 40) : Label7.TextAlign = ContentAlignment.MiddleRight
+            Label7.Font = New Font("Segoe UI", 13, FontStyle.Bold) : Label7.ForeColor = colorAcento
+        End If
+
+        If TextBoxTotalPed IsNot Nothing Then
+            TextBoxTotalPed.Bounds = New Rectangle(xDerecha - 140, yTotales + 80, 120, 30)
+            TextBoxTotalPed.TextAlign = HorizontalAlignment.Right
+            TextBoxTotalPed.Font = New Font("Segoe UI", 14, FontStyle.Bold) : TextBoxTotalPed.ForeColor = colorAcento
+            TextBoxTotalPed.BackColor = Color.FromArgb(25, 30, 40) : TextBoxTotalPed.BorderStyle = BorderStyle.None
+        End If
+
+        Dim panelWidth As Integer = TextBoxBase.Right - LabelBase.Left + 20
+        panelTotales.Bounds = New Rectangle(xDerecha - panelWidth, yTotales, panelWidth, 115)
+
+        Dim yBotones As Integer = DataGridView1.Bottom + 45
+
+        EstilizarBoton(ButtonGuardar, margenIzq, yBotones, Color.FromArgb(0, 120, 215), Color.White)
+        EstilizarBoton(ButtonBorrar, margenIzq + 110, yBotones, Color.FromArgb(209, 52, 56), Color.White)
+        EstilizarBoton(ButtonNuevoPed, margenIzq + 220, yBotones, Color.FromArgb(0, 120, 215), Color.White)
+
+        EstilizarBoton(ButtonBorrarLineas, margenIzq + 380, yBotones, Color.FromArgb(85, 85, 85), Color.White)
+        ButtonBorrarLineas.Text = "- Quitar Línea" : ButtonBorrarLineas.Width = 110
+
+        EstilizarBoton(ButtonNuevaLinea, margenIzq + 500, yBotones, Color.FromArgb(40, 140, 90), Color.White)
+        ButtonNuevaLinea.Text = "+ Añadir Línea" : ButtonNuevaLinea.Width = 110
+
+        EstilizarBoton(ButtonAnterior, xDerecha - 560, yBotones, Me.BackColor, Color.White)
+        EstilizarBoton(ButtonSiguiente, xDerecha - 450, yBotones, Me.BackColor, Color.White)
+
+        If LabelStock IsNot Nothing Then LabelStock.Location = New Point(margenIzq, DataGridView1.Bottom + 10)
+
+        DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
+        Dim botonesAbajo As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPed, ButtonBorrarLineas, ButtonNuevaLinea, ButtonAnterior, ButtonSiguiente}
+
+        For Each b In botonesAbajo
+            If b IsNot Nothing Then
+                b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+            End If
+        Next
+        TextBoxBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        TextBoxIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If TextBoxTotalPed IsNot Nothing Then TextBoxTotalPed.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        LabelBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        LabelIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        If Label7 IsNot Nothing Then Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        lineaTotal.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+    End Sub
+
+    Private Sub EstilizarBoton(btn As Button, x As Integer, y As Integer, bg As Color, fg As Color)
+        btn.Location = New Point(x, y)
+        btn.Size = New Size(100, 35)
+        btn.FlatStyle = FlatStyle.Flat
+        btn.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
+        btn.Cursor = Cursors.Hand
+        btn.BackColor = bg
+        btn.ForeColor = fg
+        btn.FlatAppearance.BorderSize = 0
+    End Sub
+#End Region
+
+    ' =========================================================================
+    ' MOTOR DE EXPORTACIÓN A PDF (PEDIDOS DE COMPRA)
+    ' =========================================================================
+    Private Sub btnImprimir_Click(sender As Object, e As EventArgs) Handles btnImprimir.Click
+        If String.IsNullOrWhiteSpace(TextBoxPedido.Text) Then
+            MessageBox.Show("No hay ningún documento cargado para imprimir.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Exclamation)
+            Return
+        End If
+
+        docImprimir.DefaultPageSettings.Landscape = False
+        docImprimir.DefaultPageSettings.PaperSize = New Printing.PaperSize("A4", 827, 1169)
+        docImprimir.DocumentName = "PedidoCompra_" & TextBoxPedido.Text
+
+        Dim ppd As New PrintPreviewDialog()
+        ppd.Document = docImprimir
+        ppd.Width = 900 : ppd.Height = 700
+        CType(ppd, Form).WindowState = FormWindowState.Maximized
+        ppd.ShowDialog()
+    End Sub
+
+    Private Sub docImprimir_BeginPrint(sender As Object, e As Printing.PrintEventArgs) Handles docImprimir.BeginPrint
+        _filaActualImpresion = 0
+    End Sub
+
+    Private Sub docImprimir_PrintPage(sender As Object, e As Printing.PrintPageEventArgs) Handles docImprimir.PrintPage
+        Dim g As Graphics = e.Graphics
+
+        Dim fTituloDoc As New Font("Segoe UI", 24, FontStyle.Bold)
+        Dim fEmpresa As New Font("Segoe UI", 14, FontStyle.Bold)
+        Dim fCabecera As New Font("Segoe UI", 10, FontStyle.Bold)
+        Dim fProvNombre As New Font("Segoe UI", 12, FontStyle.Bold)
+        Dim fNormal As New Font("Segoe UI", 10, FontStyle.Regular)
+        Dim fFila As New Font("Segoe UI", 9, FontStyle.Regular)
+        Dim fTotalGordo As New Font("Segoe UI", 14, FontStyle.Bold)
+
+        Dim bNegro As New SolidBrush(Color.Black)
+        Dim bGrisOscuro As New SolidBrush(Color.FromArgb(70, 75, 80))
+        Dim bAzulCorporativo As New SolidBrush(Color.FromArgb(40, 50, 70))
+        Dim bBlanco As New SolidBrush(Color.White)
+        Dim bGrisClaro As New SolidBrush(Color.FromArgb(245, 245, 245))
+
+        Dim lapizFino As New Pen(Color.FromArgb(220, 220, 220), 1)
+        Dim lapizGrueso As New Pen(Color.FromArgb(40, 50, 70), 2)
+
+        Dim margenIzq As Integer = 50
+        Dim margenDer As Integer = 777
+        Dim anchoPagina As Integer = 727
+        Dim yPos As Integer = 50
+
+        Dim formatoIzquierda As New StringFormat() With {.Alignment = StringAlignment.Near, .LineAlignment = StringAlignment.Center}
+        Dim formatoDerecha As New StringFormat() With {.Alignment = StringAlignment.Far, .LineAlignment = StringAlignment.Center}
+        Dim formatoCentro As New StringFormat() With {.Alignment = StringAlignment.Center, .LineAlignment = StringAlignment.Center}
+
+        ' ===========================================================
+        ' 1. CABECERA DEL DOCUMENTO
+        ' ===========================================================
+        If _filaActualImpresion = 0 Then
+            ' A) EMPRESA (la nuestra, la que compra)
+            Dim empNombre As String = "EMPRESA NO CONFIGURADA", empCIF As String = "", empDireccion As String = "", empCP_Pob As String = "", empTelefono As String = ""
+            Try
+                Dim c = ConexionBD.GetConnection()
+                If c.State <> ConnectionState.Open Then c.Open()
+                Dim sql As String = "SELECT NombreFiscal, CIF, Direccion, Poblacion, CodigoPostal, Telefono FROM Empresa LIMIT 1"
+                Using cmd As New SQLiteCommand(sql, c)
+                    Using reader As SQLiteDataReader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            empNombre = If(IsDBNull(reader("NombreFiscal")), "", reader("NombreFiscal").ToString())
+                            empCIF = If(IsDBNull(reader("CIF")), "", reader("CIF").ToString())
+                            empDireccion = If(IsDBNull(reader("Direccion")), "", reader("Direccion").ToString())
+                            Dim cp As String = If(IsDBNull(reader("CodigoPostal")), "", reader("CodigoPostal").ToString())
+                            Dim pob As String = If(IsDBNull(reader("Poblacion")), "", reader("Poblacion").ToString())
+                            empCP_Pob = (cp & " " & pob).Trim()
+                            empTelefono = If(IsDBNull(reader("Telefono")), "", reader("Telefono").ToString())
+                        End If
+                    End Using
+                End Using
+            Catch ex As Exception
+            End Try
+
+            g.DrawString(empNombre, fEmpresa, bAzulCorporativo, margenIzq, yPos)
+            g.DrawString("CIF: " & empCIF, fNormal, bGrisOscuro, margenIzq, yPos + 25)
+            Dim bloqueContacto As String = empDireccion
+            If empCP_Pob <> "" Then bloqueContacto &= vbCrLf & empCP_Pob
+            If empTelefono <> "" Then bloqueContacto &= vbCrLf & "Tlf: " & empTelefono
+            g.DrawString(bloqueContacto, fNormal, bGrisOscuro, margenIzq, yPos + 45)
+
+            ' B) DATOS DEL DOCUMENTO (PEDIDO DE COMPRA)
+            g.DrawString("PEDIDO DE COMPRA", fTituloDoc, bAzulCorporativo, margenDer, yPos, formatoDerecha)
+
+            g.DrawString("Nº Documento: " & TextBoxPedido.Text, fCabecera, bNegro, margenDer, yPos + 40, formatoDerecha)
+            g.DrawString("Fecha: " & TextBoxFecha.Text, fNormal, bGrisOscuro, margenDer, yPos + 60, formatoDerecha)
+            g.DrawString("Entrega Prevista: " & DateTimePickerFecha.Value.ToShortDateString(), fCabecera, bAzulCorporativo, margenDer, yPos + 80, formatoDerecha)
+            g.DrawString("Comprador: " & TextBoxComprador.Text, fNormal, bGrisOscuro, margenDer, yPos + 105, formatoDerecha)
+
+            yPos += 135
+            g.DrawLine(lapizGrueso, margenIzq, yPos, margenDer, yPos)
+            yPos += 20
+
+            ' C) PROVEEDOR
+            Dim provNombre As String = TextBoxProveedor.Text
+            Dim provCIF As String = "", provDireccion As String = "", provPoblacion As String = "", provContacto As String = ""
+
+            Try
+                Dim c = ConexionBD.GetConnection()
+                If c.State <> ConnectionState.Open Then c.Open()
+                Dim sqlProv As String = "SELECT NombreFiscal, CIF, Direccion, Poblacion, Provincia, Telefono, Email FROM Proveedores WHERE CodigoProveedor = @id LIMIT 1"
+                Using cmd As New SQLiteCommand(sqlProv, c)
+                    cmd.Parameters.AddWithValue("@id", TextBoxIdProveedor.Text.Trim())
+                    Using reader As SQLiteDataReader = cmd.ExecuteReader()
+                        If reader.Read() Then
+                            provNombre = If(IsDBNull(reader("NombreFiscal")), TextBoxProveedor.Text, reader("NombreFiscal").ToString())
+                            provCIF = If(IsDBNull(reader("CIF")), "", "CIF: " & reader("CIF").ToString())
+                            provDireccion = If(IsDBNull(reader("Direccion")), "", reader("Direccion").ToString())
+                            Dim pob As String = If(IsDBNull(reader("Poblacion")), "", reader("Poblacion").ToString())
+                            Dim prov As String = If(IsDBNull(reader("Provincia")), "", reader("Provincia").ToString())
+                            provPoblacion = If(pob <> "" And prov <> "", pob & " (" & prov & ")", pob & prov)
+                            Dim tel As String = If(IsDBNull(reader("Telefono")), "", "Tlf: " & reader("Telefono").ToString())
+                            Dim mail As String = If(IsDBNull(reader("Email")), "", reader("Email").ToString())
+                            provContacto = If(tel <> "" And mail <> "", tel & " | " & mail, tel & mail)
+                        End If
+                    End Using
+                End Using
+            Catch ex As Exception
+            End Try
+
+            g.FillRectangle(bGrisClaro, margenIzq, yPos, anchoPagina, 145)
+            g.DrawRectangle(lapizFino, margenIzq, yPos, anchoPagina, 145)
+            g.DrawString("DATOS DEL PROVEEDOR:", fCabecera, bAzulCorporativo, margenIzq + 15, yPos + 10)
+            g.DrawString(provNombre, fProvNombre, bNegro, margenIzq + 15, yPos + 35)
+
+            Dim xDatos As Integer = margenIzq + 15
+            Dim yDatos As Integer = yPos + 62
+            Dim interlineado As Integer = 18
+
+            If provCIF <> "" Then g.DrawString(provCIF, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If provDireccion <> "" Then g.DrawString(provDireccion, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If provPoblacion <> "" Then g.DrawString(provPoblacion, fNormal, bGrisOscuro, xDatos, yDatos) : yDatos += interlineado
+            If provContacto <> "" Then g.DrawString(provContacto, fNormal, bGrisOscuro, xDatos, yDatos)
+
+            yPos += 165
+        Else
+            yPos += 30
+        End If
+
+        ' ===========================================================
+        ' 2. CABECERA DE LA TABLA
+        ' ===========================================================
+        Dim rectCant As New Rectangle(margenIzq, yPos, 60, 30)
+        Dim rectDesc As New Rectangle(margenIzq + 60, yPos, 340, 30)
+        Dim rectPrecio As New Rectangle(margenIzq + 400, yPos, 110, 30)
+        Dim rectDto As New Rectangle(margenIzq + 510, yPos, 70, 30)
+        Dim rectTotal As New Rectangle(margenIzq + 580, yPos, 147, 30)
+
+        g.FillRectangle(bAzulCorporativo, margenIzq, yPos, anchoPagina, 30)
+
+        g.DrawString("Cant.", fCabecera, bBlanco, rectCant, formatoCentro)
+        g.DrawString("Descripción", fCabecera, bBlanco, rectDesc, formatoIzquierda)
+        g.DrawString("Precio", fCabecera, bBlanco, rectPrecio, formatoDerecha)
+        g.DrawString("% Dto", fCabecera, bBlanco, rectDto, formatoDerecha)
+        g.DrawString("Total", fCabecera, bBlanco, rectTotal, formatoDerecha)
+
+        yPos += 35
+
+        ' ===========================================================
+        ' 3. RECORRER LÍNEAS DEL DATAGRIDVIEW
+        ' ===========================================================
+        While _filaActualImpresion < DataGridView1.Rows.Count
+            Dim row As DataGridViewRow = DataGridView1.Rows(_filaActualImpresion)
+            If row.IsNewRow Then Exit While
+
+            rectCant.Y = yPos : rectDesc.Y = yPos : rectPrecio.Y = yPos : rectDto.Y = yPos : rectTotal.Y = yPos
+
+            Dim cant As String = If(row.Cells("CantidadSolicitada").Value IsNot Nothing, row.Cells("CantidadSolicitada").Value.ToString(), "0")
+            Dim desc As String = If(row.Cells("Descripcion").Value IsNot Nothing, row.Cells("Descripcion").Value.ToString(), "")
+            Dim precio As String = If(row.Cells("PrecioUnitario").Value IsNot Nothing, Convert.ToDecimal(row.Cells("PrecioUnitario").Value).ToString("N2") & " €", "0,00 €")
+            Dim dto As String = If(row.Cells("Descuento").Value IsNot Nothing, row.Cells("Descuento").Value.ToString() & " %", "0 %")
+            Dim totalLinea As String = If(row.Cells("Total").Value IsNot Nothing, Convert.ToDecimal(row.Cells("Total").Value).ToString("N2") & " €", "0,00 €")
+
+            If desc.Length > 55 Then desc = desc.Substring(0, 52) & "..."
+
+            g.DrawString(cant, fFila, bNegro, rectCant, formatoCentro)
+            g.DrawString(desc, fFila, bNegro, rectDesc, formatoIzquierda)
+            g.DrawString(precio, fFila, bNegro, rectPrecio, formatoDerecha)
+            g.DrawString(dto, fFila, bNegro, rectDto, formatoDerecha)
+            g.DrawString(totalLinea, fFila, bNegro, rectTotal, formatoDerecha)
+
+            yPos += 25
+            g.DrawLine(lapizFino, margenIzq, yPos, margenDer, yPos)
+            yPos += 5
+
+            _filaActualImpresion += 1
+
+            If yPos > 1000 AndAlso _filaActualImpresion < DataGridView1.Rows.Count Then
+                e.HasMorePages = True
+                Return
+            End If
+        End While
+
+        ' ===========================================================
+        ' 4. TOTALES
+        ' ===========================================================
+        If _filaActualImpresion >= DataGridView1.Rows.Count Then
+            yPos += 20
+
+            Dim totalBase As String = TextBoxBase.Text.Replace("Base imponible :", "").Trim()
+            Dim totalIVA As String = TextBoxIva.Text.Replace("I.V.A :", "").Trim()
+            Dim totalDoc As String = TextBoxTotalPed.Text.Replace("TOTAL :", "").Trim()
+
+            Dim anchoCajaTotales As Integer = 300
+            Dim xCaja As Integer = margenDer - anchoCajaTotales
+            Dim yNotas As Integer = yPos
+
+            If cboFormaPago.Text <> "" Then
+                g.DrawString("Forma de pago:", fCabecera, bAzulCorporativo, margenIzq, yNotas)
+                g.DrawString(cboFormaPago.Text, fNormal, bNegro, margenIzq + 110, yNotas)
+                yNotas += 35
+            End If
+
+            If TextBoxObservaciones.Text.Trim() <> "" Then
+                g.DrawString("Observaciones:", fCabecera, bAzulCorporativo, margenIzq, yNotas)
+                Dim rectObs As New Rectangle(margenIzq, yNotas + 20, anchoCajaTotales - 20, 60)
+                g.DrawString(TextBoxObservaciones.Text, fNormal, bGrisOscuro, rectObs)
+            End If
+
+            g.DrawString("Base Imponible:", fNormal, bGrisOscuro, xCaja, yPos)
+            g.DrawString(totalBase, fNormal, bNegro, margenDer, yPos, formatoDerecha)
+            yPos += 25
+
+            g.DrawString("Impuestos (IVA):", fNormal, bGrisOscuro, xCaja, yPos)
+            g.DrawString(totalIVA, fNormal, bNegro, margenDer, yPos, formatoDerecha)
+            yPos += 30
+
+            g.FillRectangle(bAzulCorporativo, xCaja, yPos, anchoCajaTotales, 45)
+
+            Dim rectTxtTotal As New Rectangle(xCaja + 15, yPos, 150, 45)
+            Dim rectValTotal As New Rectangle(xCaja + 150, yPos, anchoCajaTotales - 165, 45)
+
+            g.DrawString("TOTAL A PAGAR", fCabecera, bBlanco, rectTxtTotal, formatoIzquierda)
+            g.DrawString(totalDoc, fTotalGordo, bBlanco, rectValTotal, formatoDerecha)
+
+            yPos += 80
+            g.DrawString("Pedido emitido. Pendiente de aceptación por el proveedor.", fFila, bGrisOscuro, margenIzq, yPos)
+
+            e.HasMorePages = False
+        End If
+    End Sub
 End Class

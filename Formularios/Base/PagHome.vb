@@ -241,7 +241,9 @@ Public Class PagHome
                 AbrirFormulario(New FrmFacturas())
             Case "Albaranes", "Albaran", "Albarán"
                 AbrirFormulario(New FrmAlbaranes())
-
+            ' --- COMPRAS ---
+            Case "Pedidos a proveedor"
+                AbrirFormulario(New FrmPedidosCompra())
             ' --- TERCEROS ---
             Case "Clientes", "Cliente"
                 AbrirFormulario(New FrmClientes())
