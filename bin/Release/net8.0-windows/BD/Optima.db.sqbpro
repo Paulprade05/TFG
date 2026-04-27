@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="C:\Users\paul\Desktop\OPTIMA\Optima\bin\Debug\net8.0-windows\BD\Optima.db" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><current_tab id="3"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="3243"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><current_table name="Articulos"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="Agencias" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths/><filter_values><column index="1" value=""/><column index="2" value=""/><column index="3" value=""/><column index="4" value=""/></filter_values><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="Albaranes" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths/><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="Articulos" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths><column index="3" value="246"/></column_widths><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="Clientes" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths/><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="FacturasCompra" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths/><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="FormasPago" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths/><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="LineasPresupuesto" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths><column index="5" value="243"/></column_widths><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="Presupuestos" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths/><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table><table schema="main" name="Rutas" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk=""><sort/><column_widths/><filter_values/><display_formats/><hidden_columns/><plot_y_axes/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">-- =============================================
+-- SCRIPT DE CARGA DE DATOS MASIVA (VERSIÓN CORREGIDA)
+-- Genera: Maestros, Artículos, Clientes, Presupuestos, Pedidos y Facturas.
+-- =============================================
+
+-- 1. DESACTIVAR RESTRICCIONES TEMPORALMENTE PARA LIMPIEZA
+PRAGMA foreign_keys = OFF;
+
+-- Limpieza de tablas
+DELETE FROM LineasFacturaVenta;
+DELETE FROM FacturasVenta;
+DELETE FROM LineasAlbaran;
+DELETE FROM Albaranes;
+DELETE FROM LineasPedido;
+DELETE FROM Pedidos;
+DELETE FROM LineasPresupuesto;
+DELETE FROM Presupuestos;
+DELETE FROM Articulos;
+DELETE FROM Clientes;
+DELETE FROM Vendedores;
+DELETE FROM Familias;
+DELETE FROM FormasPago;
+
+-- Reiniciar contadores de ID (para que empiecen en 1)
+DELETE FROM sqlite_sequence WHERE name IN (
+'LineasFacturaVenta', 'FacturasVenta', 'LineasPedido', 'Pedidos',
+'LineasPresupuesto', 'Presupuestos', 'Articulos', 'Clientes',
+'Vendedores', 'Familias', 'FormasPago'
+);
+
+PRAGMA foreign_keys = ON;
+
+-- 2. DATOS MAESTROS BÁSICOS
+INSERT INTO FormasPago (Descripcion, NumeroVencimientos, DiasPrimerVencimiento) VALUES
+('Contado', 1, 0),
+('Transferencia 30 días', 1, 30),
+('Giro 60 días', 1, 60),
+('Recibo domiciliado', 1, 0),
+('Pago con Tarjeta', 1, 0);
+
+INSERT INTO Familias (Codigo, Nombre) VALUES
+('ELEC', 'Electrónica'),
+('PAPE', 'Papelería'),
+('MOBI', 'Mobiliario'),
+('SOFT', 'Software'),
+('LIMPI', 'Limpieza');
+
+INSERT INTO Vendedores (Nombre, Comision, Activo) VALUES
+('Ana García', 3.5, 1),
+('Carlos López', 3.0, 1),
+('Beatriz Sanz', 4.0, 1),
+('David Ruiz', 2.5, 1),
+('Elena Mora', 5.0, 1);
+
+-- 3. GENERACIÓN MASIVA DE ARTÍCULOS (500 registros)
+WITH RECURSIVE cnt(x) AS (
+SELECT 1 UNION ALL SELECT x + 1 FROM cnt WHERE x &lt; 500
+)
+INSERT INTO Articulos (CodigoReferencia, Descripcion, ID_Familia, PrecioCoste, PrecioVenta, StockActual)
+SELECT
+'REF-' || printf('%05d', x),
+'Producto Modelo ' || CASE (x % 5) WHEN 0 THEN 'Alpha' WHEN 1 THEN 'Beta' WHEN 2 THEN 'Gamma' ELSE 'Delta' END || ' ' || x,
+(SELECT ID_Familia FROM Familias ORDER BY RANDOM() LIMIT 1),
+(x * 0.5) + 10,
+(x * 0.5 * 1.4) + 15,
+100
+FROM cnt;
+
+-- 4. GENERACIÓN MASIVA DE CLIENTES (200 registros)
+WITH RECURSIVE cnt(x) AS (
+SELECT 1 UNION ALL SELECT x + 1 FROM cnt WHERE x &lt; 200
+)
+INSERT INTO Clientes (CodigoCliente, NombreFiscal, CIF, Poblacion, ID_FormaPago, ID_Vendedor)
+SELECT
+'CL-' || printf('%04d', x),
+'Empresa Cliente ' || x || ' S.L.',
+printf('%08d', ABS(RANDOM() % 99999999)) || 'B',
+CASE (x % 3) WHEN 0 THEN 'Logroño' WHEN 1 THEN 'Calahorra' ELSE 'Haro' END,
+(SELECT ID_FormaPago FROM FormasPago ORDER BY RANDOM() LIMIT 1),
+(SELECT ID_Vendedor FROM Vendedores ORDER BY RANDOM() LIMIT 1)
+FROM cnt;
+
+-- 5. GENERACIÓN DE PRESUPUESTOS (300 registros)
+WITH RECURSIVE cnt(x) AS (
+SELECT 1 UNION ALL SELECT x + 1 FROM cnt WHERE x &lt; 300
+)
+INSERT INTO Presupuestos (NumeroPresupuesto, Fecha, ID_Cliente, ID_Vendedor, Estado)
+SELECT
+'PRE-' || printf('%05d', x),
+date('now', '-' || (x % 365) || ' days'),
+(SELECT ID_Cliente FROM Clientes ORDER BY RANDOM() LIMIT 1),
+(SELECT ID_Vendedor FROM Vendedores ORDER BY RANDOM() LIMIT 1),
+CASE (x % 3) WHEN 0 THEN 'Pendiente' WHEN 1 THEN 'Aceptado' ELSE 'Rechazado' END
+FROM cnt;
+
+-- Líneas de Presupuesto (2 líneas por presupuesto)
+INSERT INTO LineasPresupuesto (ID_Presupuesto, NumeroOrden, ID_Articulo, Descripcion, Cantidad, PrecioUnitario)
+SELECT ID_Presupuesto, 1, (SELECT ID_Articulo FROM Articulos ORDER BY RANDOM() LIMIT 1), 'Art. Presupuestado Principal', 1, 100.0 FROM Presupuestos;
+
+INSERT INTO LineasPresupuesto (ID_Presupuesto, NumeroOrden, ID_Articulo, Descripcion, Cantidad, PrecioUnitario)
+SELECT ID_Presupuesto, 2, (SELECT ID_Articulo FROM Articulos ORDER BY RANDOM() LIMIT 1), 'Art. Presupuestado Secundario', 5, 50.0 FROM Presupuestos;
+
+-- 6. GENERACIÓN DE PEDIDOS (200 registros)
+WITH RECURSIVE cnt(x) AS (
+SELECT 1 UNION ALL SELECT x + 1 FROM cnt WHERE x &lt; 200
+)
+INSERT INTO Pedidos (NumeroPedido, ID_Presupuesto, ID_Cliente, Fecha)
+SELECT
+'PED-' || printf('%05d', x),
+CASE WHEN (x &lt;= 100) THEN x ELSE NULL END,
+(SELECT ID_Cliente FROM Clientes ORDER BY RANDOM() LIMIT 1),
+date('now', '-' || (x % 180) || ' days')
+FROM cnt;
+
+-- Líneas de Pedido (2 líneas por pedido)
+INSERT INTO LineasPedido (ID_Pedido, NumeroOrden, ID_Articulo, Cantidad)
+SELECT ID_Pedido, 1, (SELECT ID_Articulo FROM Articulos ORDER BY RANDOM() LIMIT 1), 10 FROM Pedidos;
+
+INSERT INTO LineasPedido (ID_Pedido, NumeroOrden, ID_Articulo, Cantidad)
+SELECT ID_Pedido, 2, (SELECT ID_Articulo FROM Articulos ORDER BY RANDOM() LIMIT 1), 5 FROM Pedidos;
+
+-- 7. GENERACIÓN MASIVA DE FACTURAS (2000 registros)
+WITH RECURSIVE cnt(x) AS (
+SELECT 1 UNION ALL SELECT x + 1 FROM cnt WHERE x &lt; 2000
+)
+INSERT INTO FacturasVenta (NumeroFactura, Fecha, ID_Cliente, TotalFactura, Cobrada)
+SELECT
+'FV-' || strftime('%Y', 'now') || '-' || printf('%05d', x),
+date('now', '-' || (x % 730) || ' days'),
+(SELECT ID_Cliente FROM Clientes ORDER BY RANDOM() LIMIT 1),
+0, -- Se calculará después
+(x % 2)
+FROM cnt;
+
+-- Líneas de Factura (2 líneas por factura)
+INSERT INTO LineasFacturaVenta (ID_FacturaVenta, NumeroOrden, ID_Articulo, Descripcion, Cantidad, PrecioUnitario)
+SELECT ID_FacturaVenta, 1, (SELECT ID_Articulo FROM Articulos ORDER BY RANDOM() LIMIT 1), 'Venta de mercancía', 2, 50.0 FROM FacturasVenta;
+
+INSERT INTO LineasFacturaVenta (ID_FacturaVenta, NumeroOrden, ID_Articulo, Descripcion, Cantidad, PrecioUnitario)
+SELECT ID_FacturaVenta, 2, (SELECT ID_Articulo FROM Articulos ORDER BY RANDOM() LIMIT 1), 'Servicios', 1, 30.0 FROM FacturasVenta;
+
+-- 8. ACTUALIZAR TOTALES DE LAS FACTURAS
+UPDATE FacturasVenta
+SET TotalFactura = (
+SELECT SUM(Cantidad * PrecioUnitario)
+FROM LineasFacturaVenta
+WHERE LineasFacturaVenta.ID_FacturaVenta = FacturasVenta.ID_FacturaVenta
+);
+
+UPDATE FacturasVenta SET
+BaseImponible = TotalFactura / 1.21,
+ImporteIVA = TotalFactura - (TotalFactura / 1.21);</sql><current_tab id="0"/></tab_sql></sqlb_project>
