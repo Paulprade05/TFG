@@ -1124,219 +1124,460 @@ Public Class FrmFacturas
         dtp.Format = DateTimePickerFormat.Custom : dtp.CustomFormat = "dd/MM/yyyy"
         dtp.Font = New Font("Segoe UI", 10) : dtp.MinimumSize = New Size(0, 25)
     End Sub
+    ' --- PALETA DE COLORES CENTRALIZADA (rediseño modernizado) ---
+    Private Shared ReadOnly COLOR_FONDO As Color = Color.FromArgb(70, 75, 80)
+    Private Shared ReadOnly COLOR_BANDA As Color = Color.FromArgb(40, 50, 70)
+    Private Shared ReadOnly COLOR_PANEL_TOTALES As Color = Color.FromArgb(25, 30, 40)
+    Private Shared ReadOnly COLOR_ACENTO As Color = Color.FromArgb(0, 150, 255)
+    Private Shared ReadOnly COLOR_TEXTO_SECUNDARIO As Color = Color.FromArgb(170, 180, 195)
+    Private Shared ReadOnly COLOR_LINEA_DIVISORIA As Color = Color.FromArgb(120, 130, 140)
+    Private Shared ReadOnly COLOR_SEPARADOR_GRUPO As Color = Color.FromArgb(95, 105, 120)
+
+    Private Shared ReadOnly BTN_AZUL_PRIMARIO As Color = Color.FromArgb(0, 120, 215)
+    Private Shared ReadOnly BTN_ROJO_PELIGRO As Color = Color.FromArgb(209, 52, 56)
+    Private Shared ReadOnly BTN_VERDE_AÑADIR As Color = Color.FromArgb(40, 140, 90)
+    Private Shared ReadOnly BTN_GRIS_NEUTRO As Color = Color.FromArgb(85, 85, 85)
+
+    ' --- ESTADO DEL PANEL DESPLEGABLE DE LOGÍSTICA ---
+    Private _logisticaVisible As Boolean = False
+    Private WithEvents btnToggleLogistica As New Button()
+
     Private Sub ReorganizarControlesAutomaticamente()
         If Me.ClientSize.Width < 100 Then Return
 
-        ' 1. Quitar anclajes antiguos
         For Each ctrl As Control In Me.Controls
             ctrl.Anchor = AnchorStyles.Top Or AnchorStyles.Left
         Next
 
-        ' =========================================================
-        ' DECLARACIÓN DE TODAS LAS COORDENADAS (¡Arriba del todo!)
-        ' =========================================================
         Dim margenIzq As Integer = 30
         Dim anchoForm As Integer = Me.ClientSize.Width
         Dim altoForm As Integer = Me.ClientSize.Height
-        Dim yTabla As Integer = 245
+        Dim anchoUtil As Integer = anchoForm - (margenIzq * 2)
 
-        Dim yFila1 As Integer = 30
-        Dim yFila2 As Integer = 55
-        Dim yFila3 As Integer = 95
-        Dim yFila4 As Integer = 120
-        Dim yFila5 As Integer = 160 ' Fila para Formas de Pago y Rutas
-        Dim yFila6 As Integer = 185
+        ' ============================================================
+        ' 1. BANDA SUPERIOR CON TÍTULO Y NÚMERO DE DOCUMENTO
+        ' ============================================================
+        Dim alturaBanda As Integer = 60
 
-        Dim col1_X As Integer = margenIzq
-        Dim col2_X As Integer = 190
-        Dim col3_X As Integer = 380
+        Dim bandaSuperior As Panel = Me.Controls.OfType(Of Panel)().FirstOrDefault(Function(p) p.Name = "BandaSuperior")
+        If bandaSuperior Is Nothing Then
+            bandaSuperior = New Panel() With {.Name = "BandaSuperior", .BackColor = COLOR_BANDA}
+            Me.Controls.Add(bandaSuperior)
+            bandaSuperior.SendToBack()
+        End If
+        bandaSuperior.Bounds = New Rectangle(0, 0, anchoForm, alturaBanda)
+        bandaSuperior.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
 
-        ' =========================================================
-        ' 2. CABECERA IZQUIERDA (Distancias compactas)
-        ' =========================================================
-        ' Alinear Etiquetas
+        Dim lblTitulo As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LblTituloDoc")
+        If lblTitulo Is Nothing Then
+            lblTitulo = New Label() With {.Name = "LblTituloDoc", .AutoSize = False, .BackColor = COLOR_BANDA,
+                                          .ForeColor = Color.White, .TextAlign = ContentAlignment.MiddleLeft,
+                                          .Font = New Font("Segoe UI", 18, FontStyle.Bold)}
+            Me.Controls.Add(lblTitulo)
+        End If
+        lblTitulo.Text = "FACTURA DE VENTA"
+        lblTitulo.Bounds = New Rectangle(margenIzq, 0, 400, alturaBanda)
+        lblTitulo.BringToFront()
+
+        Dim lblNumDocEtiqueta As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LblNumDocEtiqueta")
+        If lblNumDocEtiqueta Is Nothing Then
+            lblNumDocEtiqueta = New Label() With {.Name = "LblNumDocEtiqueta", .AutoSize = False, .BackColor = COLOR_BANDA,
+                                                  .ForeColor = COLOR_TEXTO_SECUNDARIO, .TextAlign = ContentAlignment.MiddleRight,
+                                                  .Font = New Font("Segoe UI", 9.5F, FontStyle.Regular), .Text = "Nº Documento"}
+            Me.Controls.Add(lblNumDocEtiqueta)
+        End If
+        lblNumDocEtiqueta.Bounds = New Rectangle(margenIzq + 410, 8, 110, 20)
+        lblNumDocEtiqueta.BringToFront()
+
+        ' Nº de factura destacado
+        If TextBoxFactura IsNot Nothing Then
+            TextBoxFactura.Bounds = New Rectangle(margenIzq + 410, 28, 130, 28)
+            TextBoxFactura.BackColor = COLOR_PANEL_TOTALES
+            TextBoxFactura.ForeColor = COLOR_ACENTO
+            TextBoxFactura.Font = New Font("Segoe UI", 11.5F, FontStyle.Bold)
+            TextBoxFactura.BorderStyle = BorderStyle.FixedSingle
+            TextBoxFactura.TextAlign = HorizontalAlignment.Center
+            TextBoxFactura.BringToFront()
+        End If
+
+        If Button1 IsNot Nothing Then
+            Button1.Bounds = New Rectangle(margenIzq + 545, 28, 30, 28)
+            Button1.BackColor = BTN_AZUL_PRIMARIO
+            Button1.ForeColor = Color.White
+            Button1.FlatStyle = FlatStyle.Flat
+            Button1.FlatAppearance.BorderSize = 0
+            Button1.Font = New Font("Segoe UI", 11.0F, FontStyle.Bold)
+            Button1.Cursor = Cursors.Hand
+            Button1.Text = "🔍"
+            Button1.BringToFront()
+        End If
+
+        ' Ocultar etiquetas sueltas (las reemplaza el título)
         For Each ctrl As Control In Me.Controls
-            If TypeOf ctrl Is Label AndAlso Not ctrl.Name.Contains("Linea") AndAlso ctrl.Parent Is Me Then
-                ctrl.BringToFront()
-                ctrl.ForeColor = Color.WhiteSmoke
-                ctrl.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
+            If TypeOf ctrl Is Label AndAlso ctrl.Parent Is Me _
+               AndAlso ctrl.Name <> "LblTituloDoc" AndAlso ctrl.Name <> "LblNumDocEtiqueta" _
+               AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" _
+               AndAlso ctrl.Name <> "LineaDivisoria" Then
+                Dim texto As String = ctrl.Text.Trim().ToLower()
+                If texto = "factura" Or texto = "documento" Or texto = "pedido" Or texto = "albaran" Or texto = "albarán" Then
+                    ctrl.Visible = False
+                End If
+            End If
+        Next
 
+        ' ============================================================
+        ' 2. ZONA DE FORMULARIO — IDÉNTICA AL ALBARÁN/PEDIDO/FACTURA DE COMPRA
+        ' ============================================================
+        Dim yInicioFormulario As Integer = alturaBanda + 25
+
+        Dim col1_X As Integer = margenIzq                  ' Cliente / Vendedor
+        Dim col2_X As Integer = 600                        ' Fecha / Vencimiento / Estado / Observaciones
+        Dim col3_X As Integer = col2_X + 460               ' Agencia (justo después de Observaciones)
+
+        Dim yFila1 As Integer = yInicioFormulario
+        Dim yFila2 As Integer = yInicioFormulario + 22
+        Dim yFila3 As Integer = yInicioFormulario + 60
+        Dim yFila4 As Integer = yInicioFormulario + 82
+        Dim yFila5 As Integer = yInicioFormulario + 120
+        Dim yFila6 As Integer = yInicioFormulario + 142
+
+        For Each ctrl As Control In Me.Controls
+            If TypeOf ctrl Is Label AndAlso ctrl.Parent Is Me _
+               AndAlso ctrl.Name <> "LblTituloDoc" AndAlso ctrl.Name <> "LblNumDocEtiqueta" _
+               AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" _
+               AndAlso ctrl.Name <> "LineaDivisoria" Then
+                ctrl.BackColor = Color.Transparent
+                ctrl.ForeColor = Color.WhiteSmoke
+                ctrl.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+                ctrl.BringToFront()
                 Select Case ctrl.Text.Trim().ToLower()
-                    Case "factura", "documento", "pedido", "albaran", "albarán"
-                        ctrl.Text = "Factura" ' Forzamos el nombre correcto
-                        ctrl.Location = New Point(col1_X, yFila1)
-                    Case "cliente" : ctrl.Location = New Point(col2_X, yFila1)
-                    Case "fecha" : ctrl.Location = New Point(col3_X, yFila1)
+                    Case "cliente" : ctrl.Location = New Point(col1_X, yFila1)
+                    Case "fecha" : ctrl.Location = New Point(col2_X, yFila1)
                     Case "fecha entrega", "vencimiento"
-                        ctrl.Text = "Vencimiento" ' Forzamos el nombre correcto
-                        ctrl.Location = New Point(col3_X + 130, yFila1)
+                        ctrl.Text = "Vencimiento"
+                        ctrl.Location = New Point(col2_X + 160, yFila1)
                     Case "vendedor" : ctrl.Location = New Point(col1_X, yFila3)
                     Case "estado" : ctrl.Location = New Point(col2_X, yFila3)
-                    Case "agencia" : ctrl.Location = New Point(col3_X, yFila3)
+                    Case "agencia" : ctrl.Location = New Point(col3_X, yFila1)
                 End Select
             End If
         Next
 
-        ' Alinear Cajas Fila 1
-        If TextBoxFactura IsNot Nothing Then TextBoxFactura.Bounds = New Rectangle(col1_X, yFila2, 100, 25)
-        If Button1 IsNot Nothing Then Button1.Bounds = New Rectangle(col1_X + 105, yFila2, 30, 25)
+        ' Crear etiqueta "Observaciones" si no existe en el form principal
+        Dim lblObs As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LblObservacionesFac")
+        If lblObs Is Nothing Then
+            lblObs = New Label() With {.Name = "LblObservacionesFac", .AutoSize = False, .Text = "Observaciones",
+                                       .BackColor = Color.Transparent, .ForeColor = Color.WhiteSmoke,
+                                       .Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)}
+            Me.Controls.Add(lblObs)
+        End If
+        lblObs.Bounds = New Rectangle(col2_X + 160, yFila3, 150, 20)
+        lblObs.BringToFront()
 
-        If TextBoxIdCliente IsNot Nothing Then TextBoxIdCliente.Bounds = New Rectangle(col2_X, yFila2, 50, 25)
-        If TextBoxCliente IsNot Nothing Then TextBoxCliente.Bounds = New Rectangle(col2_X + 55, yFila2, 130, 25)
+        ' --- Bloque 1: Cliente y Vendedor ---
+        If TextBoxIdCliente IsNot Nothing Then TextBoxIdCliente.Bounds = New Rectangle(col1_X, yFila2, 60, 25)
+        If TextBoxCliente IsNot Nothing Then TextBoxCliente.Bounds = New Rectangle(col1_X + 65, yFila2, 460, 25)
+        If TextBoxIdVendedor IsNot Nothing Then TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 50, 25)
+        If TextBoxVendedor IsNot Nothing Then TextBoxVendedor.Bounds = New Rectangle(col1_X + 55, yFila4, 470, 25)
 
-        ' --- CAJAS DE FECHA ---
-        If TextBoxFecha IsNot Nothing Then TextBoxFecha.Bounds = New Rectangle(col3_X, yFila2, 120, 25)
-
+        ' --- Bloque 2: Fechas y Estado ---
+        If TextBoxFecha IsNot Nothing Then TextBoxFecha.Bounds = New Rectangle(col2_X, yFila2, 140, 25)
         If DateTimePickerFecha IsNot Nothing Then
-            ' Le damos la posición nueva y lo ensanchamos a 120
-            DateTimePickerFecha.Bounds = New Rectangle(col3_X + 130, yFila2, 120, 25)
+            DateTimePickerFecha.Bounds = New Rectangle(col2_X + 160, yFila2, 140, 25)
             DateTimePickerFecha.BringToFront()
         End If
+        If cboEstado IsNot Nothing Then cboEstado.Bounds = New Rectangle(col2_X, yFila4, 140, 25)
 
-        ' Alinear Cajas Fila 2
-        If TextBoxIdVendedor IsNot Nothing Then TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 40, 25)
-        If TextBoxVendedor IsNot Nothing Then TextBoxVendedor.Bounds = New Rectangle(col1_X + 45, yFila4, 110, 25)
+        ' TextBox de observaciones espejo (sincroniza con TextBoxObservaciones interno del TabControl)
+        Dim txtObsPrincipal As TextBox = TryCast(Me.Controls.Find("TextBoxObsFacPrincipal", False).FirstOrDefault(), TextBox)
+        If txtObsPrincipal Is Nothing Then
+            txtObsPrincipal = New TextBox() With {.Name = "TextBoxObsFacPrincipal"}
+            Me.Controls.Add(txtObsPrincipal)
+            AddHandler txtObsPrincipal.TextChanged, Sub(s, e)
+                                                        Dim encontrados = TabControlModerno2?.Controls.Find("TextBoxObservaciones", True)
+                                                        If encontrados IsNot Nothing AndAlso encontrados.Length > 0 Then
+                                                            If encontrados(0).Text <> txtObsPrincipal.Text Then
+                                                                encontrados(0).Text = txtObsPrincipal.Text
+                                                            End If
+                                                        End If
+                                                    End Sub
+        End If
+        txtObsPrincipal.Bounds = New Rectangle(col2_X + 160, yFila4, 280, 25)
+        Dim encontradosObs = TabControlModerno2?.Controls.Find("TextBoxObservaciones", True)
+        If encontradosObs IsNot Nothing AndAlso encontradosObs.Length > 0 Then
+            If txtObsPrincipal.Text <> encontradosObs(0).Text Then txtObsPrincipal.Text = encontradosObs(0).Text
+        End If
+        txtObsPrincipal.BringToFront()
 
-        If cboEstado IsNot Nothing Then cboEstado.Bounds = New Rectangle(col2_X, yFila4, 185, 25)
-        If cboAgencias IsNot Nothing Then cboAgencias.Bounds = New Rectangle(col3_X, yFila4, 130, 25)
+        ' --- Bloque 3: Agencia ---
+        If cboAgencias IsNot Nothing Then cboAgencias.Bounds = New Rectangle(col3_X, yFila2, 280, 25)
 
-        ' --- COMBOS NUEVOS (Forma de pago y Ruta) ---
-        If lblFormaPago IsNot Nothing Then lblFormaPago.Location = New Point(col1_X, yFila5)
+        ' --- Tercera fila: Forma de pago + Ruta ---
+        If lblFormaPago IsNot Nothing Then
+            lblFormaPago.Location = New Point(col1_X, yFila5)
+            lblFormaPago.BackColor = Color.Transparent
+            lblFormaPago.ForeColor = Color.WhiteSmoke
+            lblFormaPago.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+        End If
         If cboFormaPago IsNot Nothing Then
-            cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 140, 25)
-            cboFormaPago.Font = New Font("Segoe UI", 10.5F)
+            cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 220, 25)
+            cboFormaPago.Font = New Font("Segoe UI", 10.0F)
         End If
 
-        If lblRuta IsNot Nothing Then lblRuta.Location = New Point(col2_X, yFila5)
+        If lblRuta IsNot Nothing Then
+            lblRuta.Location = New Point(col1_X + 240, yFila5)
+            lblRuta.BackColor = Color.Transparent
+            lblRuta.ForeColor = Color.WhiteSmoke
+            lblRuta.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+        End If
         If cboRuta IsNot Nothing Then
-            cboRuta.Bounds = New Rectangle(col2_X, yFila6, 320, 25) ' Ancho de 320 para que no pise la logística
-            cboRuta.Font = New Font("Segoe UI", 10.5F)
+            cboRuta.Bounds = New Rectangle(col1_X + 240, yFila6, 400, 25)
+            cboRuta.Font = New Font("Segoe UI", 10.0F)
         End If
 
-        ' =========================================================
-        ' 3. CABECERA DERECHA (TabControl Logística)
-        ' =========================================================
-        Dim anchoLogistica As Integer = 650
+        ' ============================================================
+        ' 3. BOTÓN TOGGLE PARA MOSTRAR/OCULTAR LOGÍSTICA
+        ' ============================================================
+        Dim yToggle As Integer = yFila6 + 35
+
+        If btnToggleLogistica.Parent Is Nothing Then
+            btnToggleLogistica.FlatStyle = FlatStyle.Flat
+            btnToggleLogistica.FlatAppearance.BorderSize = 0
+            btnToggleLogistica.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+            btnToggleLogistica.Cursor = Cursors.Hand
+            btnToggleLogistica.BackColor = COLOR_BANDA
+            btnToggleLogistica.ForeColor = COLOR_ACENTO
+            btnToggleLogistica.TextAlign = ContentAlignment.MiddleLeft
+            btnToggleLogistica.Padding = New Padding(15, 0, 0, 0)
+            Me.Controls.Add(btnToggleLogistica)
+        End If
+        btnToggleLogistica.Bounds = New Rectangle(margenIzq, yToggle, anchoUtil, 32)
+        btnToggleLogistica.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        btnToggleLogistica.Text = If(_logisticaVisible, "▼  Ocultar logística y envío", "▶  Mostrar logística y envío")
+        btnToggleLogistica.BringToFront()
+
+        ' ============================================================
+        ' 4. PANEL LOGÍSTICA (TabControl) — desplegable
+        ' ============================================================
+        Dim yTabLogistica As Integer = yToggle + 38
+        Dim altoTabLogistica As Integer = If(_logisticaVisible, 175, 0)
 
         If TabControlModerno2 IsNot Nothing Then
-            TabControlModerno2.Visible = True
-            TabControlModerno2.ItemSize = New Size(180, 30)
-            TabControlModerno2.Bounds = New Rectangle(anchoForm - margenIzq - anchoLogistica, 25, anchoLogistica, 195)
-            TabControlModerno2.BringToFront()
+            TabControlModerno2.Visible = _logisticaVisible
+            If _logisticaVisible Then
+                TabControlModerno2.ItemSize = New Size(180, 30)
+                TabControlModerno2.Bounds = New Rectangle(margenIzq, yTabLogistica, anchoUtil, altoTabLogistica)
+                TabControlModerno2.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+                TabControlModerno2.BringToFront()
 
-            For Each tab As TabPage In TabControlModerno2.TabPages
-                tab.BackColor = Me.BackColor
-            Next
+                For Each tab As TabPage In TabControlModerno2.TabPages
+                    tab.BackColor = Me.BackColor
+                Next
 
-            Dim MoverInterno = Sub(nombre As String, x As Integer, y As Integer, w As Integer, h As Integer)
-                                   Dim encontrados = TabControlModerno2.Controls.Find(nombre, True)
-                                   If encontrados.Length > 0 Then
-                                       encontrados(0).Bounds = New Rectangle(x, y, w, h)
-                                       If TypeOf encontrados(0) Is Label Then
-                                           encontrados(0).ForeColor = Color.WhiteSmoke
-                                           encontrados(0).BackColor = Color.Transparent
-                                           encontrados(0).Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
+                Dim MoverInterno = Sub(nombre As String, x As Integer, y As Integer, w As Integer, h As Integer)
+                                       Dim encontrados = TabControlModerno2.Controls.Find(nombre, True)
+                                       If encontrados.Length > 0 Then
+                                           encontrados(0).Bounds = New Rectangle(x, y, w, h)
+                                           If TypeOf encontrados(0) Is Label Then
+                                               encontrados(0).ForeColor = Color.WhiteSmoke
+                                               encontrados(0).BackColor = Color.Transparent
+                                               encontrados(0).Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+                                           End If
                                        End If
-                                   End If
-                               End Sub
+                                   End Sub
 
-            MoverInterno("Label25", 15, 10, 150, 20) : MoverInterno("TextBoxDireccion", 15, 36, 250, 25)
-            MoverInterno("Label27", 280, 10, 150, 20) : MoverInterno("TextBoxPoblacion", 280, 36, 210, 25)
-            MoverInterno("Label26", 510, 10, 120, 20) : MoverInterno("TextBoxCP", 510, 36, 100, 25)
+                ' Pestaña "Logística y Envío"
+                MoverInterno("Label25", 15, 12, 80, 18) : MoverInterno("TextBoxDireccion", 15, 33, 360, 25)
+                MoverInterno("Label27", 390, 12, 80, 18) : MoverInterno("TextBoxPoblacion", 390, 33, 240, 25)
+                MoverInterno("Label26", 645, 12, 100, 18) : MoverInterno("TextBoxCP", 645, 33, 110, 25)
 
-            MoverInterno("Label31", 15, 85, 200, 20) : MoverInterno("TextBoxTracking", 15, 111, 250, 25)
-            MoverInterno("Label28", 280, 85, 100, 20) : MoverInterno("ComboBoxPortes", 280, 111, 130, 25)
-            MoverInterno("Label30", 430, 85, 60, 20) : MoverInterno("TextBoxBultos", 430, 111, 70, 25)
-            MoverInterno("Label29", 510, 85, 60, 20) : MoverInterno("TextBoxPeso", 510, 111, 100, 25)
+                MoverInterno("Label31", 15, 75, 200, 18) : MoverInterno("TextBoxTracking", 15, 96, 360, 25)
+                MoverInterno("Label28", 390, 75, 80, 18) : MoverInterno("ComboBoxPortes", 390, 96, 130, 25)
+                MoverInterno("Label30", 535, 75, 60, 18) : MoverInterno("TextBoxBultos", 535, 96, 90, 25)
+                MoverInterno("Label29", 645, 75, 60, 18) : MoverInterno("TextBoxPeso", 645, 96, 110, 25)
 
-            MoverInterno("Label20", 15, 10, 100, 20) : MoverInterno("TextBoxAlbaranOrigen", 15, 36, 130, 25)
-            MoverInterno("btnImportarAlbaran", 150, 36, 30, 25)
-            MoverInterno("Label21", 200, 10, 150, 20) : MoverInterno("TextBoxObservaciones", 200, 36, 410, 120)
+                ' Pestaña "Detalles y Origen"
+                MoverInterno("Label20", 15, 12, 100, 18) : MoverInterno("TextBoxAlbaranOrigen", 15, 33, 130, 25)
+                MoverInterno("btnImportarAlbaran", 150, 33, 30, 25)
+                MoverInterno("Label21", 200, 12, 150, 18) : MoverInterno("TextBoxObservaciones", 200, 33, 555, 100)
 
-            Dim ocultarDuplicados = Sub(nombre As String)
-                                        Dim encontrados = TabControlModerno2.Controls.Find(nombre, True)
-                                        If encontrados.Length > 0 Then encontrados(0).Visible = False
-                                    End Sub
-            ocultarDuplicados("TextBox5") : ocultarDuplicados("Button4") : ocultarDuplicados("Label23")
+                ' Estilizar el botón importar como lupa azul
+                Dim btnImp = TabControlModerno2.Controls.Find("btnImportarAlbaran", True)
+                If btnImp.Length > 0 AndAlso TypeOf btnImp(0) Is Button Then
+                    Dim b As Button = CType(btnImp(0), Button)
+                    b.BackColor = BTN_AZUL_PRIMARIO
+                    b.ForeColor = Color.White
+                    b.FlatStyle = FlatStyle.Flat
+                    b.FlatAppearance.BorderSize = 0
+                    b.Font = New Font("Segoe UI", 11.0F, FontStyle.Bold)
+                    b.Cursor = Cursors.Hand
+                    b.Text = "🔍"
+                End If
+
+                Dim ocultarDuplicados = Sub(nombre As String)
+                                            Dim encontrados = TabControlModerno2.Controls.Find(nombre, True)
+                                            If encontrados.Length > 0 Then encontrados(0).Visible = False
+                                        End Sub
+                ocultarDuplicados("TextBox5") : ocultarDuplicados("Button4") : ocultarDuplicados("Label23")
+            End If
         End If
 
-        ' =========================================================
-        ' 4. LÍNEA DIVISORIA Y TABLA 
-        ' =========================================================
+        ' ============================================================
+        ' 5. LÍNEA DIVISORIA + GRID
+        ' ============================================================
         Dim lineaDivisoria As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaDivisoria")
         If lineaDivisoria Is Nothing Then
-            lineaDivisoria = New Label() With {.Name = "LineaDivisoria", .BackColor = Color.FromArgb(120, 130, 140), .Height = 2}
+            lineaDivisoria = New Label() With {.Name = "LineaDivisoria", .BackColor = COLOR_LINEA_DIVISORIA, .Height = 2}
             Me.Controls.Add(lineaDivisoria)
         End If
-        lineaDivisoria.Bounds = New Rectangle(margenIzq, yTabla - 15, anchoForm - (margenIzq * 2), 2)
+
+        Dim yTabla As Integer = yToggle + 38 + altoTabLogistica + If(_logisticaVisible, 20, 5)
+        lineaDivisoria.Bounds = New Rectangle(margenIzq, yTabla - 12, anchoUtil, 2)
+        lineaDivisoria.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         lineaDivisoria.BringToFront()
 
         DataGridView1.Parent = Me
         DataGridView1.MaximumSize = New Size(0, 0)
         DataGridView1.Dock = DockStyle.None
-        DataGridView1.Bounds = New Rectangle(margenIzq, yTabla, anchoForm - (margenIzq * 2), altoForm - yTabla - 150)
+        DataGridView1.Bounds = New Rectangle(margenIzq, yTabla, anchoUtil, altoForm - yTabla - 150)
         DataGridView1.BackgroundColor = Me.BackColor
         DataGridView1.BorderStyle = BorderStyle.None
+        DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
 
         If DataGridView1.Columns.Contains("Descripcion") Then DataGridView1.Columns("Descripcion").AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
 
-        ' =========================================================
-        ' 5. TOTALES 
-        ' =========================================================
+        ' ============================================================
+        ' 6. PANEL LATERAL DERECHO DE TOTALES
+        ' ============================================================
         Dim xDerecha As Integer = anchoForm - margenIzq
-        Dim yTotales As Integer = DataGridView1.Bottom + 10
-        Dim colorFondoTotales As Color = Color.FromArgb(25, 30, 40)
+        Dim yTotales As Integer = DataGridView1.Bottom + 12
 
-        Dim panelTotales As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "PanelTotalesResumen")
+        Dim panelTotales As Panel = Me.Controls.OfType(Of Panel)().FirstOrDefault(Function(p) p.Name = "PanelTotales")
         If panelTotales Is Nothing Then
-            panelTotales = New Label() With {.Name = "PanelTotalesResumen", .BackColor = colorFondoTotales}
+            panelTotales = New Panel() With {.Name = "PanelTotales", .BackColor = COLOR_PANEL_TOTALES,
+                                              .BorderStyle = BorderStyle.FixedSingle}
             Me.Controls.Add(panelTotales)
+            panelTotales.SendToBack()
         End If
-        panelTotales.Bounds = New Rectangle(xDerecha - 320, yTotales, 320, 115)
-        panelTotales.SendToBack()
+        Dim panelAncho As Integer = 340
+        Dim panelAlto As Integer = 120
+        panelTotales.Bounds = New Rectangle(xDerecha - panelAncho, yTotales, panelAncho, panelAlto)
+        panelTotales.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
 
-        If TextBoxBase IsNot Nothing Then TextBoxBase.Bounds = New Rectangle(xDerecha - 135, yTotales + 10, 120, 25)
-        If TextBoxIva IsNot Nothing Then TextBoxIva.Bounds = New Rectangle(xDerecha - 135, yTotales + 40, 120, 25)
-        If TextBoxTotalAlb IsNot Nothing Then TextBoxTotalAlb.Bounds = New Rectangle(xDerecha - 135, yTotales + 80, 120, 30)
+        Dim viejoPanel As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "PanelTotalesResumen")
+        If viejoPanel IsNot Nothing Then Me.Controls.Remove(viejoPanel)
 
-        If LabelBase IsNot Nothing Then LabelBase.Location = New Point(xDerecha - 310, yTotales + 12)
-        If LabelIva IsNot Nothing Then LabelIva.Location = New Point(xDerecha - 310, yTotales + 42)
-        If Label7 IsNot Nothing Then Label7.Location = New Point(xDerecha - 310, yTotales + 85)
+        Dim xPanelInt As Integer = xDerecha - panelAncho + 15
+        Dim wPanelInt As Integer = panelAncho - 30
 
-        If LabelBase IsNot Nothing Then LabelBase.BackColor = colorFondoTotales : LabelBase.ForeColor = Color.White
-        If LabelIva IsNot Nothing Then LabelIva.BackColor = colorFondoTotales : LabelIva.ForeColor = Color.White
-        If Label7 IsNot Nothing Then Label7.BackColor = colorFondoTotales : Label7.ForeColor = Color.FromArgb(0, 150, 255) : Label7.Font = New Font("Segoe UI", 13, FontStyle.Bold)
+        ' Base
+        If LabelBase IsNot Nothing Then
+            LabelBase.BackColor = COLOR_PANEL_TOTALES
+            LabelBase.ForeColor = COLOR_TEXTO_SECUNDARIO
+            LabelBase.Font = New Font("Segoe UI", 10.0F, FontStyle.Regular)
+            LabelBase.TextAlign = ContentAlignment.MiddleLeft
+            LabelBase.Bounds = New Rectangle(xPanelInt, yTotales + 12, 150, 22)
+            LabelBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        End If
+        If TextBoxBase IsNot Nothing Then
+            TextBoxBase.BackColor = COLOR_PANEL_TOTALES
+            TextBoxBase.ForeColor = Color.White
+            TextBoxBase.Font = New Font("Segoe UI Semibold", 10.5F, FontStyle.Bold)
+            TextBoxBase.BorderStyle = BorderStyle.None
+            TextBoxBase.TextAlign = HorizontalAlignment.Right
+            TextBoxBase.Bounds = New Rectangle(xPanelInt + wPanelInt - 140, yTotales + 12, 140, 22)
+            TextBoxBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        End If
 
-        If TextBoxBase IsNot Nothing Then TextBoxBase.BackColor = colorFondoTotales : TextBoxBase.ForeColor = Color.White : TextBoxBase.BorderStyle = BorderStyle.None
-        If TextBoxIva IsNot Nothing Then TextBoxIva.BackColor = colorFondoTotales : TextBoxIva.ForeColor = Color.White : TextBoxIva.BorderStyle = BorderStyle.None
-        If TextBoxTotalAlb IsNot Nothing Then
-            TextBoxTotalAlb.BackColor = colorFondoTotales : TextBoxTotalAlb.ForeColor = Color.FromArgb(0, 150, 255) : TextBoxTotalAlb.BorderStyle = BorderStyle.None : TextBoxTotalAlb.Font = New Font("Segoe UI", 14, FontStyle.Bold)
+        ' IVA
+        If LabelIva IsNot Nothing Then
+            LabelIva.BackColor = COLOR_PANEL_TOTALES
+            LabelIva.ForeColor = COLOR_TEXTO_SECUNDARIO
+            LabelIva.Font = New Font("Segoe UI", 10.0F, FontStyle.Regular)
+            LabelIva.TextAlign = ContentAlignment.MiddleLeft
+            LabelIva.Bounds = New Rectangle(xPanelInt, yTotales + 38, 150, 22)
+            LabelIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        End If
+        If TextBoxIva IsNot Nothing Then
+            TextBoxIva.BackColor = COLOR_PANEL_TOTALES
+            TextBoxIva.ForeColor = Color.White
+            TextBoxIva.Font = New Font("Segoe UI Semibold", 10.5F, FontStyle.Bold)
+            TextBoxIva.BorderStyle = BorderStyle.None
+            TextBoxIva.TextAlign = HorizontalAlignment.Right
+            TextBoxIva.Bounds = New Rectangle(xPanelInt + wPanelInt - 140, yTotales + 38, 140, 22)
+            TextBoxIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         End If
 
         Dim lineaTotal As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaTotales")
         If lineaTotal Is Nothing Then
-            lineaTotal = New Label() With {.Name = "LineaTotales", .BackColor = Color.FromArgb(100, 100, 100), .Height = 1}
+            lineaTotal = New Label() With {.Name = "LineaTotales", .BackColor = Color.FromArgb(80, 90, 105), .Height = 1}
             Me.Controls.Add(lineaTotal)
         End If
-        lineaTotal.Bounds = New Rectangle(xDerecha - 300, yTotales + 70, 280, 1)
+        lineaTotal.Bounds = New Rectangle(xPanelInt, yTotales + 68, wPanelInt, 1)
+        lineaTotal.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         lineaTotal.BringToFront()
 
-        ' =========================================================
-        ' 6. BOTONES
-        ' =========================================================
-        Dim yBotones As Integer = DataGridView1.Bottom + 45
+        ' TOTAL destacado
+        If Label7 IsNot Nothing Then
+            Label7.Text = "TOTAL"
+            Label7.BackColor = COLOR_PANEL_TOTALES
+            Label7.ForeColor = COLOR_ACENTO
+            Label7.Font = New Font("Segoe UI", 13.0F, FontStyle.Bold)
+            Label7.TextAlign = ContentAlignment.MiddleLeft
+            Label7.Bounds = New Rectangle(xPanelInt, yTotales + 78, 150, 32)
+            Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        End If
+        If TextBoxTotalAlb IsNot Nothing Then
+            TextBoxTotalAlb.BackColor = COLOR_PANEL_TOTALES
+            TextBoxTotalAlb.ForeColor = COLOR_ACENTO
+            TextBoxTotalAlb.Font = New Font("Segoe UI", 16.0F, FontStyle.Bold)
+            TextBoxTotalAlb.BorderStyle = BorderStyle.None
+            TextBoxTotalAlb.TextAlign = HorizontalAlignment.Right
+            TextBoxTotalAlb.Bounds = New Rectangle(xPanelInt + wPanelInt - 180, yTotales + 78, 180, 32)
+            TextBoxTotalAlb.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        End If
 
-        EstilizarBoton(ButtonGuardar, margenIzq, yBotones, Color.FromArgb(0, 120, 215), Color.White)
-        EstilizarBoton(ButtonBorrar, margenIzq + 115, yBotones, Color.FromArgb(209, 52, 56), Color.White)
-        If ButtonNuevoPed IsNot Nothing Then EstilizarBoton(ButtonNuevoPed, margenIzq + 230, yBotones, Color.FromArgb(0, 120, 215), Color.White)
+        ' ============================================================
+        ' 7. BARRA INFERIOR DE BOTONES AGRUPADOS
+        ' ============================================================
+        Dim yBotones As Integer = DataGridView1.Bottom + 50
 
-        ' ==========================================================
-        ' AQUÍ INTEGRAMOS EL BOTÓN DE EXPORTAR PDF
-        ' ==========================================================
+        EstilizarBoton(ButtonGuardar, margenIzq, yBotones, BTN_AZUL_PRIMARIO, Color.White)
+        EstilizarBoton(ButtonBorrar, margenIzq + 110, yBotones, BTN_ROJO_PELIGRO, Color.White)
+        If ButtonNuevoPed IsNot Nothing Then EstilizarBoton(ButtonNuevoPed, margenIzq + 220, yBotones, BTN_AZUL_PRIMARIO, Color.White)
+
+        Dim sep1 As Label = ObtenerOCrearSeparador("SepGrupo1")
+        sep1.Bounds = New Rectangle(margenIzq + 332, yBotones + 4, 1, 27)
+        sep1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+
+        If ButtonNuevaLinea IsNot Nothing Then
+            EstilizarBoton(ButtonNuevaLinea, margenIzq + 348, yBotones, BTN_VERDE_AÑADIR, Color.White)
+            ButtonNuevaLinea.Text = "+ Añadir Línea" : ButtonNuevaLinea.Width = 120
+        End If
+        If ButtonBorrarLineas IsNot Nothing Then
+            EstilizarBoton(ButtonBorrarLineas, margenIzq + 478, yBotones, BTN_GRIS_NEUTRO, Color.White)
+            ButtonBorrarLineas.Text = "− Quitar Línea" : ButtonBorrarLineas.Width = 120
+        End If
+
+        Dim sep2 As Label = ObtenerOCrearSeparador("SepGrupo2")
+        sep2.Bounds = New Rectangle(margenIzq + 610, yBotones + 4, 1, 27)
+        sep2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+
+        EstilizarBoton(ButtonAnterior, margenIzq + 626, yBotones, COLOR_FONDO, Color.White)
+        ButtonAnterior.FlatAppearance.BorderColor = COLOR_TEXTO_SECUNDARIO
+        ButtonAnterior.FlatAppearance.BorderSize = 1
+        ButtonAnterior.Text = "◀ Anterior"
+
+        EstilizarBoton(ButtonSiguiente, margenIzq + 736, yBotones, COLOR_FONDO, Color.White)
+        ButtonSiguiente.FlatAppearance.BorderColor = COLOR_TEXTO_SECUNDARIO
+        ButtonSiguiente.FlatAppearance.BorderSize = 1
+        ButtonSiguiente.Text = "Siguiente ▶"
+
+        ' Botón Exportar PDF
         If btnImprimir.Parent Is Nothing Then
             btnImprimir.Text = "Exportar PDF"
             btnImprimir.Size = New Size(120, 35)
-            btnImprimir.BackColor = Color.FromArgb(40, 140, 90)
+            btnImprimir.BackColor = BTN_VERDE_AÑADIR
             btnImprimir.ForeColor = Color.White
             btnImprimir.FlatStyle = FlatStyle.Flat
             btnImprimir.FlatAppearance.BorderSize = 0
@@ -1344,47 +1585,46 @@ Public Class FrmFacturas
             btnImprimir.Cursor = Cursors.Hand
             Me.Controls.Add(btnImprimir)
         End If
-        ' Lo colocamos exactamente debajo del botón Guardar (+ 40 píxeles)
-        btnImprimir.Location = New Point(margenIzq, yBotones + 40)
+        btnImprimir.Location = New Point(margenIzq, yBotones + 45)
         btnImprimir.BringToFront()
-        ' ==========================================================
-
-        EstilizarBoton(ButtonBorrarLineas, margenIzq + 380, yBotones, Color.FromArgb(85, 85, 85), Color.White)
-        If ButtonBorrarLineas IsNot Nothing Then ButtonBorrarLineas.Text = "- Quitar Línea" : ButtonBorrarLineas.Width = 110
-
-        EstilizarBoton(ButtonNuevaLinea, margenIzq + 500, yBotones, Color.FromArgb(40, 140, 90), Color.White)
-        If ButtonNuevaLinea IsNot Nothing Then ButtonNuevaLinea.Text = "+ Añadir Línea" : ButtonNuevaLinea.Width = 110
-
-        EstilizarBoton(ButtonAnterior, xDerecha - 580, yBotones, Me.BackColor, Color.White)
-        EstilizarBoton(ButtonSiguiente, xDerecha - 465, yBotones, Me.BackColor, Color.White)
 
         Dim lblStock As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LabelStock")
-        If lblStock IsNot Nothing Then lblStock.Location = New Point(margenIzq, DataGridView1.Bottom + 10)
+        If lblStock IsNot Nothing Then
+            lblStock.Location = New Point(margenIzq + 160, DataGridView1.Bottom + 14)
+            lblStock.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        End If
 
-        DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
-        If TabControlModerno2 IsNot Nothing Then TabControlModerno2.Anchor = AnchorStyles.Top Or AnchorStyles.Right
-
-        ' Metemos btnImprimir en el array de anclajes
-        Dim anclajeAbajoIzq As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPed, ButtonBorrarLineas, ButtonNuevaLinea, lblStock, btnImprimir}
+        Dim anclajeAbajoIzq As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPed, ButtonNuevaLinea, ButtonBorrarLineas, ButtonAnterior, ButtonSiguiente, btnImprimir}
         For Each c In anclajeAbajoIzq
             If c IsNot Nothing Then c.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
         Next
-
-        ' OJO: He puesto TextBoxTotalFac, cambia el nombre si en Facturas se llama de otra manera
-        Dim anclajeAbajoDer As Control() = {ButtonAnterior, ButtonSiguiente, TextBoxBase, TextBoxIva, TextBoxTotalAlb, LabelBase, LabelIva, Label7, panelTotales, lineaTotal}
-        For Each c In anclajeAbajoDer
-            If c IsNot Nothing Then c.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        Next
     End Sub
+
+    Private Sub btnToggleLogistica_Click(sender As Object, e As EventArgs) Handles btnToggleLogistica.Click
+        _logisticaVisible = Not _logisticaVisible
+        ReorganizarControlesAutomaticamente()
+    End Sub
+
+    Private Function ObtenerOCrearSeparador(nombre As String) As Label
+        Dim sep As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = nombre)
+        If sep Is Nothing Then
+            sep = New Label() With {.Name = nombre, .BackColor = COLOR_SEPARADOR_GRUPO, .AutoSize = False}
+            Me.Controls.Add(sep)
+        End If
+        sep.BringToFront()
+        Return sep
+    End Function
+
     Private Sub EstilizarBoton(btn As System.Windows.Forms.Button, x As Integer, y As Integer, bg As Color, fg As Color)
         If btn IsNot Nothing Then
             btn.Location = New Point(x, y)
             btn.BackColor = bg : btn.ForeColor = fg
             btn.FlatStyle = FlatStyle.Flat : btn.FlatAppearance.BorderSize = 0
             btn.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
-            btn.Cursor = Cursors.Hand : btn.Height = 30
+            btn.Cursor = Cursors.Hand : btn.Height = 35 : btn.Width = 100
         End If
     End Sub
+
     ' =========================================================================
     ' MOTOR DE EXPORTACIÓN A PDF (FACTURAS)
     ' =========================================================================
