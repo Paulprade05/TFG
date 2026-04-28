@@ -179,28 +179,12 @@ Public Class FrmFacturasCompra
     End Sub
 
     Private Function GenerarProximoNumeroFactura() As String
-        Dim prefijo As String = "FAC-"
-        Dim nuevoNumero As String = $"{prefijo}001"
-        Try
-            Dim sql As String = "SELECT NumeroFacturaCompra FROM FacturasCompra WHERE NumeroFacturaCompra LIKE @patron ORDER BY NumeroFacturaCompra DESC LIMIT 1"
-
-            Dim c = ConexionBD.GetConnection()
-            If c.State <> ConnectionState.Open Then c.Open()
-
-            Using cmd As New SQLiteCommand(sql, c)
-                cmd.Parameters.AddWithValue("@patron", prefijo & "%")
-                Dim resultado = cmd.ExecuteScalar()
-                If resultado IsNot Nothing AndAlso Not IsDBNull(resultado) Then
-                    Dim partes As String() = resultado.ToString().Split("-"c)
-                    If partes.Length >= 2 AndAlso IsNumeric(partes(1)) Then
-                        nuevoNumero = $"{prefijo}{(CInt(partes(1)) + 1).ToString("D3")}"
-                    End If
-                End If
-            End Using
-        Catch
-            nuevoNumero = $"FAC-{DateTime.Now:HHmmss}"
-        End Try
-        Return nuevoNumero
+        ' Delegamos en NumeradorDocumentos. CAMBIO IMPORTANTE: antes el prefijo era "FAC-",
+        ' el mismo que las facturas de VENTA. Ahora usamos "FCO-" (Factura de COmpra) para
+        ' distinguirlos claramente. Esto es coherente con "PEC-" (PEdido Compra) y
+        ' "ALC-" (ALbarán Compra) que ya se usaban. Como en FacturasCompra hay 0 registros,
+        ' este cambio no afecta a datos existentes.
+        Return NumeradorDocumentos.SiguienteNumero("FCO-", "FacturasCompra", "NumeroFacturaCompra")
     End Function
 #End Region
 
@@ -460,12 +444,27 @@ Public Class FrmFacturasCompra
                 orden += 1
             Next
 
+            ' =========================================================
+            ' MAGIA DE ESTADOS (COMPRAS): Marcar AlbaranCompra como Facturado
+            ' Igual que en ventas, si esta factura está vinculada a un albarán de compra
+            ' lo marcamos automáticamente como "Facturado".
+            ' =========================================================
+            If Not IsDBNull(idAlbOrigen) Then
+                Using cmdEst As New SQLiteCommand("UPDATE AlbaranesCompra SET Estado = @estado WHERE ID_AlbaranCompra = @idAlb", c)
+                    cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@estado", EstadosDocumento.ALBARAN_COMPRA_FACTURADO)
+                    cmdEst.Parameters.AddWithValue("@idAlb", idAlbOrigen)
+                    cmdEst.ExecuteNonQuery()
+                End Using
+            End If
+
             trans.Commit()
             MessageBox.Show("Guardado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
             CargarFactura(_numeroFacturaActual)
 
         Catch ex As Exception
             If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("FrmFacturasCompra.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub
@@ -607,6 +606,12 @@ Public Class FrmFacturasCompra
     End Sub
 
     Private Sub ButtonBorrar_Click(sender As Object, e As EventArgs) Handles ButtonBorrar.Click
+        ' Solo administradores pueden borrar facturas (impacto fiscal).
+        If Not ComunSesionActual.EsAdministrador() Then
+            MessageBox.Show("Solo un Administrador puede eliminar facturas.", "Permiso denegado", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+
         If String.IsNullOrEmpty(_numeroFacturaActual) Then Return
         If MessageBox.Show("¿Seguro que deseas eliminar esta factura de compra?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) = DialogResult.Yes Then
             Try

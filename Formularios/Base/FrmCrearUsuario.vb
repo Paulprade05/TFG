@@ -141,15 +141,18 @@ Public Class FrmCrearUsuario
                 End If
             End Using
 
-            ' 5. Guardar el nuevo usuario con TODOS LOS DATOS
-            Dim sqlInsert As String = "INSERT INTO Usuarios (NombreUsuario, Password, Rol, NombreCompleto, Email, Activo) " &
-                                      "VALUES (@usr, @pwd, @rol, @nom, @mail, 1)"
+            ' 5. Guardar el nuevo usuario con TODOS LOS DATOS (con la contraseña hasheada)
+            Dim passwordHasheada As String = PasswordHasher.Hashear(pwd)
+
+            Dim sqlInsert As String = "INSERT INTO Usuarios (NombreUsuario, Password, Rol, NombreCompleto, Email, Activo, FechaRegistro) " &
+                                      "VALUES (@usr, @pwd, @rol, @nom, @mail, 1, @fecha)"
             Using cmd As New SQLiteCommand(sqlInsert, c)
                 cmd.Parameters.AddWithValue("@usr", usr)
-                cmd.Parameters.AddWithValue("@pwd", pwd)
+                cmd.Parameters.AddWithValue("@pwd", passwordHasheada)
                 cmd.Parameters.AddWithValue("@rol", rol)
                 cmd.Parameters.AddWithValue("@nom", nom)
                 cmd.Parameters.AddWithValue("@mail", mail)
+                cmd.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
                 cmd.ExecuteNonQuery()
             End Using
 

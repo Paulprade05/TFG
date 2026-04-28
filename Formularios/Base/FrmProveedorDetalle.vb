@@ -219,6 +219,17 @@ Public Class FrmProveedorDetalle
             MessageBox.Show("El Nombre Fiscal es obligatorio.") : Return
         End If
 
+        ' === VALIDACIONES DE ENTRADA (NO BLOQUEANTES) ===
+        ' Para proveedores normalmente esperamos CIF (empresa), pero aceptamos también NIF/NIE
+        ' por si fuera autónomo o particular. Avisamos pero no bloqueamos el guardado.
+        If Not Validador.ConfirmarSiHayProblemas(
+            ("CIF/NIF/NIE del proveedor", Validador.ValidarDocumentoIdentidad(TextBoxCif.Text)),
+            ("Email", Validador.ValidarEmail(TextBoxEmail.Text)),
+            ("Teléfono", Validador.ValidarTelefono(TextBoxTelefono.Text))
+        ) Then
+            Return
+        End If
+
         Try
             Dim conexion = ConexionBD.GetConnection()
             If conexion.State <> ConnectionState.Open Then conexion.Open()
@@ -235,7 +246,7 @@ Public Class FrmProveedorDetalle
                 cmd.Parameters.AddWithValue("@cod", TextBoxCodigo.Text)
                 cmd.Parameters.AddWithValue("@nomF", TextBoxNombreFiscal.Text)
                 cmd.Parameters.AddWithValue("@nomC", TextBoxNombreComercial.Text)
-                cmd.Parameters.AddWithValue("@cif", TextBoxCif.Text)
+                cmd.Parameters.AddWithValue("@cif", TextBoxCif.Text.Trim().ToUpperInvariant())
                 cmd.Parameters.AddWithValue("@dir", TextBoxDireccion.Text)
                 cmd.Parameters.AddWithValue("@pob", TextBoxPoblacion.Text)
                 cmd.Parameters.AddWithValue("@prov", TextBoxProvincia.Text)
@@ -250,6 +261,7 @@ Public Class FrmProveedorDetalle
             MessageBox.Show("Proveedor guardado.")
             Me.Close()
         Catch ex As Exception
+            LogErrores.Registrar("FrmProveedorDetalle.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub

@@ -89,12 +89,8 @@ Public Class PagHome
             btnInformes.DropDownItems.Add("Alerta de Stock Mínimo", Nothing, AddressOf InformeStockMinimo_Click)
             btnInformes.DropDownItems.Add("Top Artículos Más Vendidos", Nothing, AddressOf InformeArticulosMasVendidos_Click)
 
-            ' Estilizamos cada sub-botón para que "respire"
-            For Each subItem As ToolStripItem In btnInformes.DropDownItems
-                subItem.ForeColor = Color.WhiteSmoke
-                subItem.Font = New Font("Segoe UI", 10.5F, FontStyle.Regular)
-                subItem.Padding = New Padding(10, 8, 10, 8)
-            Next
+            ' (El estilo de los sub-botones se aplica abajo, en el bucle general que recorre
+            '  todos los items del MenuStrip — evitamos duplicarlo aquí.)
         End If
         ' =========================================================
         ' AÑADIR DESPLEGABLE DE CONFIGURACIÓN DINÁMICAMENTE
@@ -120,32 +116,28 @@ Public Class PagHome
             btnConfiguracion.DropDownItems.Add("👥 Usuarios y Permisos", Nothing, AddressOf ConfigUsuarios_Click)
             btnConfiguracion.DropDownItems.Add("💾 Copias de Seguridad", Nothing, AddressOf ConfigBackups_Click)
 
-            For Each subItem As ToolStripItem In btnConfiguracion.DropDownItems
-                subItem.ForeColor = Color.WhiteSmoke
-                subItem.Font = New Font("Segoe UI", 10.5F, FontStyle.Regular)
-                subItem.Padding = New Padding(10, 8, 10, 8)
-            Next
+            ' (El estilo de los sub-botones se aplica abajo, en el bucle general que recorre
+            '  todos los items del MenuStrip — evitamos duplicarlo aquí.)
         End If
-        ' 2. Bucle para expandir el área clickeable de cada botón
+        ' Bucle único que estiliza TODOS los items del MenuStrip (principales y submenús).
+        ' Antes había bloques duplicados que aplicaban Padding y luego eran sobrescritos aquí.
         For Each item As ToolStripItem In miMenu.Items
-            ' ... (tu código sigue normal aquí) ...
             item.ForeColor = Color.WhiteSmoke
 
-            ' ¡LA MAGIA! Le damos relleno interno al botón para que crezca hacia arriba y abajo.
-            ' Esto mantiene el ancho del texto automático pero hace que la zona clickeable mida los 55px.
+            ' Le damos relleno interno al botón principal para que la zona clickeable mida los 55px.
             item.Padding = New Padding(12, 16, 12, 16)
 
-            ' CASO A: SI ES UN MENÚ DESPLEGABLE
+            ' Estilo de los items del desplegable (si los hay)
             If TypeOf item Is ToolStripMenuItem Then
                 Dim menu As ToolStripMenuItem = DirectCast(item, ToolStripMenuItem)
                 For Each subItem As ToolStripItem In menu.DropDownItems
                     subItem.ForeColor = Color.WhiteSmoke
-                    ' Los submenús que caen hacia abajo los dejamos con un tamaño normal
+                    subItem.Font = New Font("Segoe UI", 10.5F, FontStyle.Regular)
                     subItem.Padding = New Padding(20, 5, 20, 5)
                 Next
             End If
 
-            ' CASO B: SI ES UN TEXTBOX
+            ' Estilo de los TextBox que estén en la barra (campo búsqueda, nombre empresa, etc.)
             If TypeOf item Is ToolStripTextBox Then
                 item.BackColor = Color.FromArgb(40, 50, 70)
                 item.ForeColor = Color.WhiteSmoke
@@ -177,26 +169,11 @@ Public Class PagHome
         ' 5. MAGIA INICIAL: ABRIR EL DASHBOARD POR DEFECTO
         ' =========================================================
         AbrirFormulario(New FrmDashboard())
-        ' Arrancamos el vigilante de copias de seguridad (revisa cada 30 segundos)
-        RelojBackups.Interval = 30000
+        ' Arrancamos el vigilante de copias de seguridad. Comprobamos cada 15 segundos para
+        ' asegurarnos de que aunque el sistema esté ocupado no nos saltamos el minuto exacto
+        ' de la hora programada.
+        RelojBackups.Interval = 15000
         RelojBackups.Start()
-    End Sub
-    Private Sub ConfigurarTreeViewModerno()
-        Dim tv = TvNavegacion ' Asegúrate de que tu control se llame así
-
-        ' 1. CONFIGURACIÓN VISUAL BÁSICA
-        tv.BackColor = Color.FromArgb(40, 50, 70) ' El mismo azul oscuro de tu Grid
-        tv.ForeColor = Color.WhiteSmoke         ' Texto claro
-        tv.Font = New Font("Segoe UI", 11, FontStyle.Regular)
-        tv.ItemHeight = 40                      ' Filas altas y cómodas
-        tv.ShowLines = False                    ' Sin líneas punteadas
-        tv.ShowPlusMinus = False                ' Sin botones +/- (Más limpio)
-        tv.FullRowSelect = True                 ' Selección de ancho completo
-        tv.BorderStyle = BorderStyle.None       ' Sin bordes hundidos
-
-        ' 2. ACTIVAR EL PINTADO PERSONALIZADO (OWNER DRAW)
-        ' Esto nos permite controlar cómo se ve la selección
-        tv.DrawMode = TreeViewDrawMode.OwnerDrawText
     End Sub
     ''' <summary>
     ''' Abre un formulario hijo dentro del panel contenedor ajustando su tamaño automáticamente.
@@ -276,10 +253,6 @@ Public Class PagHome
             Case "Agencias", "Agencia"
                 Dim frm As New FrmAgencias()
                 frm.ShowDialog()
-
-            ' --- CONFIGURACIÓN ---
-            Case "Empresa"
-                'AbrirFormulario(New FrmEmpresa())
         End Select
     End Sub
     Private Sub TvNavegacion_DrawNode(sender As Object, e As DrawTreeNodeEventArgs) Handles TvNavegacion.DrawNode
@@ -335,11 +308,13 @@ Public Class PagHome
                 New Single() {0, 0, 0, 1, 0},
                 New Single() {1, 1, 1, 0, 1}
             })
-            Dim attr As New System.Drawing.Imaging.ImageAttributes()
-            attr.SetColorMatrix(matrix)
+            ' IMPORTANTE: ImageAttributes debe liberarse o se acumula GDI handles en cada repintado
+            Using attr As New System.Drawing.Imaging.ImageAttributes()
+                attr.SetColorMatrix(matrix)
 
-            e.Graphics.DrawImage(img, New Rectangle(xPosIcono, yPosIcono, img.Width, img.Height),
-                                 0, 0, img.Width, img.Height, GraphicsUnit.Pixel, attr)
+                e.Graphics.DrawImage(img, New Rectangle(xPosIcono, yPosIcono, img.Width, img.Height),
+                                     0, 0, img.Width, img.Height, GraphicsUnit.Pixel, attr)
+            End Using
 
             anchoIcono = img.Width + 10
         End If
@@ -362,30 +337,28 @@ Public Class PagHome
 
 
     Public Sub AbrirFormulario(formularioHijo As Form)
-        ' 1. CONGELAMOS el panel para que no se vea nada de lo que pasa dentro
+        ' 1. Si ya estamos en el formulario solicitado, volvemos al Dashboard.
+        '    Esto da un comportamiento "toggle": clic en la sección donde ya estás te lleva
+        '    de vuelta al inicio. La excepción es el propio Dashboard — clicar el Dashboard
+        '    estando en él no hace nada (no tiene sentido cerrarlo y abrirlo de nuevo).
+        If formularioActivo IsNot Nothing AndAlso formularioActivo.GetType() = formularioHijo.GetType() Then
+            formularioHijo.Dispose() ' El formulario que recibimos ya no se usa, liberamos memoria
+            If TypeOf formularioActivo Is FrmDashboard Then Return
+            ' No estamos en el Dashboard → cerramos el actual y abrimos el Dashboard
+            formularioHijo = New FrmDashboard()
+        End If
+
+        ' 2. CONGELAMOS el panel para que no se vea nada de lo que pasa dentro
         SendMessage(Panel.Handle, WM_SETREDRAW, 0, 0)
 
         Try
+            ' 3. Cerramos el formulario anterior si lo había
             If formularioActivo IsNot Nothing Then
-                If formularioActivo.GetType() = formularioHijo.GetType() Then
-                    If Not TypeOf formularioActivo Is FrmDashboard Then
-                        ' Si volvemos al dashboard, también congelamos antes
-                        formularioActivo.Close()
-                        formularioActivo = New FrmDashboard()
-                    Else
-                        ' Si ya estamos, descongelamos y salimos
-                        SendMessage(Panel.Handle, WM_SETREDRAW, 1, 0)
-                        Return
-                    End If
-                Else
-                    formularioActivo.Close()
-                    formularioActivo = formularioHijo
-                End If
-            Else
-                formularioActivo = formularioHijo
+                formularioActivo.Close()
             End If
+            formularioActivo = formularioHijo
 
-            ' 2. PREPARAMOS EL HIJO (Él sigue creyendo que se está dibujando, pero Windows no lo muestra)
+            ' 4. PREPARAMOS EL HIJO (Él sigue creyendo que se está dibujando, pero Windows no lo muestra)
             formularioActivo.TopLevel = False
             formularioActivo.FormBorderStyle = FormBorderStyle.None
             formularioActivo.Dock = DockStyle.Fill
@@ -394,11 +367,11 @@ Public Class PagHome
             Panel.Controls.Add(formularioActivo)
             formularioActivo.Show()
 
-            ' 3. FORZAMOS AL HIJO A REORGANIZARSE (Aquí es donde ocurría el fantasma)
+            ' 5. FORZAMOS AL HIJO A REORGANIZARSE (Aquí es donde ocurría el fantasma)
             formularioActivo.Refresh()
 
         Finally
-            ' 4. LIBERAMOS el panel y ordenamos que se pinte TODO DE GOLPE
+            ' 6. LIBERAMOS el panel y ordenamos que se pinte TODO DE GOLPE
             SendMessage(Panel.Handle, WM_SETREDRAW, 1, 0)
             Panel.Refresh()
         End Try
@@ -451,16 +424,40 @@ Public Class PagHome
             Using cmd As New SQLiteCommand(query, conexion)
                 Dim reader = cmd.ExecuteReader
                 If reader.Read() Then
-                    NombreEmpresa.Text = reader("NombreFiscal").ToString & " : " & reader("CIF").ToString
+                    ' Construimos el saludo: empresa + usuario logueado (con rol entre paréntesis)
+                    Dim textoEmpresa As String = reader("NombreFiscal").ToString & " : " & reader("CIF").ToString
+                    Dim textoUsuario As String = ""
+                    If Not String.IsNullOrEmpty(ComunSesionActual.Usuario) Then
+                        Dim rolText As String = If(String.IsNullOrEmpty(ComunSesionActual.Rol), "Usuario", ComunSesionActual.Rol)
+                        textoUsuario = $"   |   {ComunSesionActual.Usuario} ({rolText})"
+                    End If
+
+                    Dim textoCompleto As String = textoEmpresa & textoUsuario
+                    NombreEmpresa.Text = textoCompleto
+
+                    ' === AUTOAJUSTE DE ANCHO ===
+                    ' El control 'NombreEmpresa' es un ToolStripTextBox con ancho fijo de 200px en el Designer.
+                    ' Como ahora el texto es más largo (empresa + usuario + rol), antes se cortaba por la izquierda.
+                    ' Calculamos el ancho que necesita el texto y redimensionamos el control en runtime.
+                    Try
+                        Using g As Graphics = Me.CreateGraphics()
+                            Dim tamañoTexto As SizeF = g.MeasureString(textoCompleto, NombreEmpresa.Font)
+                            ' Añadimos un pequeño margen (20 px) y un máximo de 700 px para no comerse media barra
+                            Dim anchoNecesario As Integer = Math.Min(700, CInt(tamañoTexto.Width) + 20)
+                            ' Solo crecemos, nunca encogemos por debajo del tamaño original (200)
+                            If anchoNecesario > NombreEmpresa.Width Then
+                                NombreEmpresa.Size = New Size(anchoNecesario, NombreEmpresa.Height)
+                            End If
+                        End Using
+                    Catch
+                        ' Si el cálculo falla, dejamos el control como estaba.
+                    End Try
                 End If
             End Using
         Catch ex As Exception
+            LogErrores.Registrar("PagHome.CargarDatosEmpresa", ex)
             MessageBox.Show("No se ha podido conectar a la base de datos o la tabla se encuentra vacía " & ex.Message)
         End Try
-    End Sub
-
-    Private Sub Panel_Paint(sender As Object, e As PaintEventArgs) Handles Panel.Paint
-
     End Sub
 
     Protected Overrides ReadOnly Property CreateParams As System.Windows.Forms.CreateParams
@@ -497,17 +494,17 @@ Public Class PagHome
     ' 2. OPERACIONES
     Private Sub InformePendientesCobro_Click(sender As Object, e As EventArgs)
         ' Las facturas cuyo "Estado" no sea 'Pagado'. Básico para llamar a los clientes morosos.
-        MsgBox("Abriendo Facturas Pendientes de Cobro...", MsgBoxStyle.Information, "Informes")
+        'AbrirFormulario(New FrmInformePendientesCobro())
     End Sub
 
     Private Sub InformePedidosPendientes_Click(sender As Object, e As EventArgs)
         ' Para el mozo de almacén. Qué pedidos nos han hecho y aún no se han convertido en Albarán/Enviado.
-        MsgBox("Abriendo Pedidos Pendientes de Servir...", MsgBoxStyle.Information, "Informes")
+        'AbrirFormulario(New FrmInformePedidosPendientes())
     End Sub
 
     Private Sub InformeRutas_Click(sender As Object, e As EventArgs)
         ' Se imprime por las mañanas para darle al repartidor la lista de direcciones y bultos agrupados por "Ruta".
-        MsgBox("Abriendo Hoja de Rutas...", MsgBoxStyle.Information, "Informes")
+        'AbrirFormulario(New FrmInformeRutas())
     End Sub
 
     ' 3. ALMACÉN
@@ -534,7 +531,6 @@ Public Class PagHome
         frm.ShowDialog()
         CargarDatosEmpresa() ' Refrescamos el logo al cerrar
     End Sub
-
     Private Sub ConfigUsuarios_Click(sender As Object, e As EventArgs)
         Dim frm As New FrmConfiguracion()
         frm.IrAPestana(1) ' Pestaña Usuarios
@@ -549,6 +545,11 @@ Public Class PagHome
     ' =========================================================
     ' MOTOR DE COPIAS DE SEGURIDAD EN SEGUNDO PLANO
     ' =========================================================
+    ' Antes este método tenía la lógica de copia inline, con un par de bugs:
+    '   - Usaba una ruta de origen "BD\Optima.db" que no existe (el archivo real está en
+    '     AppDomain.CurrentDomain.BaseDirectory). Por eso las copias automáticas nunca se hacían.
+    '   - Usaba File.Copy mientras la BD estaba abierta, lo que puede dejar el destino corrupto.
+    ' Ahora delegamos en GestorBackups, que usa "VACUUM INTO" (la forma correcta y atómica).
     Private Sub RelojBackups_Tick(sender As Object, e As EventArgs) Handles RelojBackups.Tick
         Dim horaActual As String = DateTime.Now.ToString("HH:mm")
 
@@ -588,51 +589,20 @@ Public Class PagHome
                         ' ¡BINGO! TOCA HACER COPIA DE SEGURIDAD AHORA MISMO
                         ' ----------------------------------------------------
                         Dim rutaBase As String = If(IsDBNull(r("RutaBackup")), "", r("RutaBackup").ToString().Trim())
-                        If String.IsNullOrEmpty(rutaBase) Then
-                            rutaBase = Path.Combine(Application.StartupPath, "BD\CopiasSeguridad")
+
+                        ' Delegamos en el gestor centralizado: él se encarga de crear la carpeta,
+                        ' usar VACUUM INTO y limpiar las copias antiguas.
+                        Dim resultado = GestorBackups.HacerCopiaAutomatica(rutaBase)
+                        If resultado IsNot Nothing Then
+                            ultimoBackupRealizado = DateTime.Now.ToString("yyyyMMdd_HHmm")
                         End If
-                        If Not Directory.Exists(rutaBase) Then Directory.CreateDirectory(rutaBase)
-
-                        ' ⚠️ IMPORTANTE: Ajusta el nombre de origen a tu base de datos real
-                        Dim archivoOrigen As String = Path.Combine(Application.StartupPath, "BD\Optima.db")
-                        Dim nombreCopia As String = "OptimaDB_AUTO_" & DateTime.Now.ToString("yyyyMMdd_HHmmss") & ".sqlite"
-                        Dim rutaDestino As String = Path.Combine(rutaBase, nombreCopia)
-
-                        ' Copiamos en silencio absoluto
-                        File.Copy(archivoOrigen, rutaDestino, True)
-                        LimpiarCopiasAntiguas(rutaBase)
-                        ' Registramos que ya se ha hecho para no repetirla en este minuto
-                        ultimoBackupRealizado = DateTime.Now.ToString("yyyyMMdd_HHmm")
                     End If
                 End Using
             End Using
         Catch ex As Exception
-            ' Si falla (porque la BD está ocupada), nos callamos. 
-            ' Es un proceso en segundo plano, no queremos asustar al usuario con mensajes de error de la nada.
-        End Try
-    End Sub
-    Private Sub LimpiarCopiasAntiguas(rutaCarpeta As String)
-        Try
-            Dim directorio As New DirectoryInfo(rutaCarpeta)
-
-            ' 1. Obtenemos solo los archivos que son automáticos (para no borrar las manuales)
-            ' Los ordenamos por fecha de creación (de más antiguo a más nuevo)
-            Dim archivosAuto = directorio.GetFiles("OptimaDB_AUTO_*.sqlite") _
-                                        .OrderBy(Function(f) f.CreationTime) _
-                                        .ToList()
-
-            ' 2. Si hay más de 5, calculamos cuántos debemos borrar
-            If archivosAuto.Count > 5 Then
-                Dim cuantosBorrar As Integer = archivosAuto.Count - 5
-
-                ' Borramos desde el primero de la lista (el más viejo)
-                For i As Integer = 0 To cuantosBorrar - 1
-                    archivosAuto(i).Delete()
-                Next
-            End If
-        Catch ex As Exception
-            ' En procesos automáticos es mejor no interrumpir al usuario si falla la limpieza
-            Debug.WriteLine("Error limpiando copias: " & ex.Message)
+            ' Si falla (porque la BD está ocupada), no asustamos al usuario con un MessageBox,
+            ' pero sí dejamos rastro en el log para poder diagnosticar después.
+            LogErrores.Registrar("PagHome.RelojBackups_Tick", ex)
         End Try
     End Sub
 End Class

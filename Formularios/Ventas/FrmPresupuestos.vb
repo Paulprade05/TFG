@@ -192,31 +192,10 @@ Public Class FrmPresupuestos
     End Sub
 
     Private Function GenerarProximoNumero() As String
-        Dim prefijo As String = "PRE-"
-        Dim nuevoNumero As String = $"{prefijo}001"
-        Try
-            Dim sql As String = "SELECT NumeroPresupuesto FROM Presupuestos WHERE NumeroPresupuesto LIKE @patron ORDER BY NumeroPresupuesto DESC LIMIT 1"
-
-            ' ---> EL CAMBIO CLAVE: Dim en lugar de Using <---
-            Dim c = ConexionBD.GetConnection()
-            If c.State <> ConnectionState.Open Then c.Open()
-
-            Using cmd As New SQLiteCommand(sql, c)
-                cmd.Parameters.AddWithValue("@patron", prefijo & "%")
-                Dim resultado = cmd.ExecuteScalar()
-                If resultado IsNot Nothing Then
-                    Dim partes As String() = resultado.ToString().Split("-"c)
-                    If partes.Length >= 2 AndAlso IsNumeric(partes(1)) Then
-                        nuevoNumero = $"{prefijo}{(CInt(partes(1)) + 1).ToString("D3")}"
-                    End If
-                End If
-            End Using
-            ' Aquí hemos quitado el "End Using" de la conexión para que NO la destruya
-
-        Catch
-            nuevoNumero = $"PRE-{DateTime.Now:HHmmss}"
-        End Try
-        Return nuevoNumero
+        ' Antes esta función ordenaba por string (ORDER BY NumeroPresupuesto DESC), lo que rompía
+        ' la numeración al pasar de PRE-999 a PRE-1000. Ahora delegamos en NumeradorDocumentos
+        ' que ordena por la parte numérica.
+        Return NumeradorDocumentos.SiguienteNumero("PRE-", "Presupuestos", "NumeroPresupuesto")
     End Function
 #End Region
 
@@ -399,6 +378,7 @@ Public Class FrmPresupuestos
 
         Catch ex As Exception
             If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("FrmPresupuestos.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub
@@ -666,17 +646,45 @@ Public Class FrmPresupuestos
 
     Private Sub TextBoxIdVendedor_Leave(sender As Object, e As EventArgs) Handles TextBoxIdVendedor.Leave
         If String.IsNullOrWhiteSpace(TextBoxIdVendedor.Text) Then TextBoxVendedor.Text = "" : Return
+
+        ' Validamos primero que el ID sea numérico antes de tocar la BD.
+        ' ID_Vendedor es INTEGER, por lo que cualquier texto no numérico no encontrará vendedor.
+        Dim idVend As Integer
+        If Not Integer.TryParse(TextBoxIdVendedor.Text.Trim(), idVend) OrElse idVend <= 0 Then
+            TextBoxVendedor.Text = "NO EXISTE"
+            Return
+        End If
+
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
-            Dim r = New SQLiteCommand("SELECT Nombre FROM Vendedores WHERE ID_Vendedor='" & TextBoxIdVendedor.Text & "'", c).ExecuteScalar()
-            TextBoxVendedor.Text = If(r IsNot Nothing, r.ToString(), "NO EXISTE")
+            ' Usamos parámetros (NUNCA concatenar texto del usuario en SQL — riesgo de inyección)
+            Using cmd As New SQLiteCommand("SELECT Nombre FROM Vendedores WHERE ID_Vendedor = @id", c)
+                cmd.Parameters.AddWithValue("@id", idVend)
+                Dim r = cmd.ExecuteScalar()
+                TextBoxVendedor.Text = If(r IsNot Nothing AndAlso Not IsDBNull(r), r.ToString(), "NO EXISTE")
+            End Using
         Catch
         End Try
     End Sub
 #End Region
 
-#Region "Auto-Organización Visual (Pixel-Perfect)"
+#Region "Auto-Organización Visual (Diseño Modernizado)"
+    ' --- PALETA DE COLORES CENTRALIZADA (idéntica a Pedidos/Albaranes/Facturas) ---
+    Private Shared ReadOnly COLOR_FONDO As Color = Color.FromArgb(70, 75, 80)
+    Private Shared ReadOnly COLOR_BANDA As Color = Color.FromArgb(40, 50, 70)
+    Private Shared ReadOnly COLOR_PANEL_TOTALES As Color = Color.FromArgb(25, 30, 40)
+    Private Shared ReadOnly COLOR_ACENTO As Color = Color.FromArgb(0, 150, 255)
+    Private Shared ReadOnly COLOR_TEXTO_SECUNDARIO As Color = Color.FromArgb(170, 180, 195)
+    Private Shared ReadOnly COLOR_LINEA_DIVISORIA As Color = Color.FromArgb(120, 130, 140)
+    Private Shared ReadOnly COLOR_SEPARADOR_GRUPO As Color = Color.FromArgb(95, 105, 120)
+
+    ' --- COLORES SEMÁNTICOS DE BOTONES ---
+    Private Shared ReadOnly BTN_AZUL_PRIMARIO As Color = Color.FromArgb(0, 120, 215)
+    Private Shared ReadOnly BTN_ROJO_PELIGRO As Color = Color.FromArgb(209, 52, 56)
+    Private Shared ReadOnly BTN_VERDE_AÑADIR As Color = Color.FromArgb(40, 140, 90)
+    Private Shared ReadOnly BTN_GRIS_NEUTRO As Color = Color.FromArgb(85, 85, 85)
+
     Private Sub ReorganizarControlesAutomaticamente()
         For Each ctrl As Control In Me.Controls : ctrl.Anchor = AnchorStyles.Top Or AnchorStyles.Left : Next
 
@@ -684,145 +692,302 @@ Public Class FrmPresupuestos
         Dim anchoForm As Integer = Me.ClientSize.Width
         Dim altoForm As Integer = Me.ClientSize.Height
 
-        Dim col1_X As Integer = margenIzq
-        Dim col2_X As Integer = 190
-        Dim col3_X As Integer = 750
+        ' ============================================================
+        ' 1. BANDA SUPERIOR CON TÍTULO Y NÚMERO DE DOCUMENTO
+        ' ============================================================
+        Dim alturaBanda As Integer = 60
 
-        Dim yFila1 As Integer = 30
-        Dim yFila2 As Integer = 55
-        Dim yFila3 As Integer = 95
-        Dim yFila4 As Integer = 120
-        Dim yFila5 As Integer = 160
-        Dim yFila6 As Integer = 185
+        ' Panel de fondo de la banda
+        Dim bandaSuperior As Panel = Me.Controls.OfType(Of Panel)().FirstOrDefault(Function(p) p.Name = "BandaSuperior")
+        If bandaSuperior Is Nothing Then
+            bandaSuperior = New Panel() With {.Name = "BandaSuperior", .BackColor = COLOR_BANDA}
+            Me.Controls.Add(bandaSuperior)
+            bandaSuperior.SendToBack()
+        End If
+        bandaSuperior.Bounds = New Rectangle(0, 0, anchoForm, alturaBanda)
+        bandaSuperior.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
 
+        ' Título grande "PRESUPUESTO"
+        Dim lblTitulo As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LblTituloDoc")
+        If lblTitulo Is Nothing Then
+            lblTitulo = New Label() With {.Name = "LblTituloDoc", .AutoSize = False, .BackColor = COLOR_BANDA,
+                                          .ForeColor = Color.White, .TextAlign = ContentAlignment.MiddleLeft,
+                                          .Font = New Font("Segoe UI", 18, FontStyle.Bold)}
+            Me.Controls.Add(lblTitulo)
+        End If
+        lblTitulo.Text = "PRESUPUESTO"
+        lblTitulo.Bounds = New Rectangle(margenIzq, 0, 400, alturaBanda)
+        lblTitulo.BringToFront()
+
+        ' Etiqueta "Nº Documento" pequeña a la derecha del título
+        Dim lblNumDocEtiqueta As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LblNumDocEtiqueta")
+        If lblNumDocEtiqueta Is Nothing Then
+            lblNumDocEtiqueta = New Label() With {.Name = "LblNumDocEtiqueta", .AutoSize = False, .BackColor = COLOR_BANDA,
+                                                  .ForeColor = COLOR_TEXTO_SECUNDARIO, .TextAlign = ContentAlignment.MiddleRight,
+                                                  .Font = New Font("Segoe UI", 9.5F, FontStyle.Regular), .Text = "Nº Documento"}
+            Me.Controls.Add(lblNumDocEtiqueta)
+        End If
+        lblNumDocEtiqueta.Bounds = New Rectangle(margenIzq + 410, 8, 110, 20)
+        lblNumDocEtiqueta.BringToFront()
+
+        ' TextBoxPresupuesto reposicionado dentro de la banda, destacado
+        TextBoxPresupuesto.Bounds = New Rectangle(margenIzq + 410, 28, 130, 28)
+        TextBoxPresupuesto.BackColor = COLOR_PANEL_TOTALES
+        TextBoxPresupuesto.ForeColor = COLOR_ACENTO
+        TextBoxPresupuesto.Font = New Font("Segoe UI", 11.5F, FontStyle.Bold)
+        TextBoxPresupuesto.BorderStyle = BorderStyle.FixedSingle
+        TextBoxPresupuesto.TextAlign = HorizontalAlignment.Center
+        TextBoxPresupuesto.BringToFront()
+
+        ' Botón lupa pegado al TextBoxPresupuesto
+        btnBuscarPresupuesto.Bounds = New Rectangle(margenIzq + 545, 28, 30, 28)
+        btnBuscarPresupuesto.BackColor = BTN_AZUL_PRIMARIO
+        btnBuscarPresupuesto.ForeColor = Color.White
+        btnBuscarPresupuesto.FlatStyle = FlatStyle.Flat
+        btnBuscarPresupuesto.FlatAppearance.BorderSize = 0
+        btnBuscarPresupuesto.Font = New Font("Segoe UI", 11.0F, FontStyle.Bold)
+        btnBuscarPresupuesto.Cursor = Cursors.Hand
+        btnBuscarPresupuesto.Text = "🔍"
+        btnBuscarPresupuesto.BackgroundImage = Nothing
+        btnBuscarPresupuesto.BringToFront()
+
+        ' Ocultar la antigua etiqueta "Presupuesto" suelta — el título ya cumple su función
         For Each ctrl As Control In Me.Controls
-            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" Then
+            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LblTituloDoc" AndAlso ctrl.Name <> "LblNumDocEtiqueta" _
+               AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" _
+               AndAlso ctrl.Name <> "LineaDivisoria" Then
+                Dim texto As String = ctrl.Text.Trim().ToLower()
+                If texto = "presupuesto" Then ctrl.Visible = False
+            End If
+        Next
+
+        ' ============================================================
+        ' 2. ZONA DE FORMULARIO (Cliente, Fechas, Estado, etc.)
+        ' ============================================================
+        Dim yInicioFormulario As Integer = alturaBanda + 25
+
+        ' Tres bloques de cabecera con coordenadas
+        Dim col1_X As Integer = margenIzq                  ' Bloque 1 - Cliente / Vendedor
+        Dim col2_X As Integer = 600                        ' Bloque 2 - Fecha / Estado
+        Dim col3_X As Integer = anchoForm - 470            ' Bloque 3 - Forma de pago
+
+        Dim yFila1 As Integer = yInicioFormulario          ' Fila etiqueta superior
+        Dim yFila2 As Integer = yInicioFormulario + 22     ' Fila valor (textbox)
+        Dim yFila3 As Integer = yInicioFormulario + 60     ' Fila etiqueta segunda fila
+        Dim yFila4 As Integer = yInicioFormulario + 82     ' Fila valor segunda fila
+        Dim yFila5 As Integer = yInicioFormulario + 120    ' Tercera línea (forma pago)
+        Dim yFila6 As Integer = yInicioFormulario + 142
+
+        ' --- Reposicionamiento de etiquetas (no incluye "Presupuesto", ya oculto) ---
+        For Each ctrl As Control In Me.Controls
+            If TypeOf ctrl Is Label AndAlso ctrl.Name <> "LineaTotales" AndAlso ctrl.Name <> "PanelTotalesResumen" _
+               AndAlso ctrl.Name <> "LblTituloDoc" AndAlso ctrl.Name <> "LblNumDocEtiqueta" _
+               AndAlso ctrl.Name <> "LineaDivisoria" Then
+                ctrl.BackColor = Color.Transparent
+                ctrl.ForeColor = Color.WhiteSmoke
+                ctrl.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
                 ctrl.BringToFront()
                 Dim texto As String = ctrl.Text.Trim().ToLower()
                 Select Case texto
-                    Case "presupuesto" : ctrl.Location = New Point(col1_X, yFila1)
-                    Case "cliente" : ctrl.Location = New Point(col2_X, yFila1)
-                    Case "fecha" : ctrl.Location = New Point(col3_X, yFila1)
+                    Case "cliente" : ctrl.Location = New Point(col1_X, yFila1)
+                    Case "fecha" : ctrl.Location = New Point(col2_X, yFila1)
                     Case "vendedor" : ctrl.Location = New Point(col1_X, yFila3)
-                    Case "observaciones" : ctrl.Location = New Point(col2_X, yFila3)
-                    Case "estado" : ctrl.Location = New Point(col3_X, yFila3)
+                    Case "estado" : ctrl.Location = New Point(col2_X, yFila3)
+                    Case "observaciones" : ctrl.Location = New Point(col2_X + 160, yFila3)
                 End Select
             End If
         Next
 
-        TextBoxPresupuesto.Bounds = New Rectangle(col1_X, yFila2, 105, 25)
-        btnBuscarPresupuesto.Bounds = New Rectangle(col1_X + 110, yFila2, 30, 25)
-        TextBoxIdCliente.Bounds = New Rectangle(col2_X, yFila2, 60, 25)
-        TextBoxCliente.Bounds = New Rectangle(col2_X + 70, yFila2, 460, 25)
-        TextBoxFecha.Bounds = New Rectangle(col3_X, yFila2, 140, 25)
-
+        ' --- Bloque 1: Cliente y Vendedor (izquierda) ---
+        TextBoxIdCliente.Bounds = New Rectangle(col1_X, yFila2, 60, 25)
+        TextBoxCliente.Bounds = New Rectangle(col1_X + 65, yFila2, 460, 25)
         TextBoxIdVendedor.Bounds = New Rectangle(col1_X, yFila4, 50, 25)
-        TextBoxVendedor.Bounds = New Rectangle(col1_X + 55, yFila4, 85, 25)
-        TextBoxObservaciones.Bounds = New Rectangle(col2_X, yFila4, 530, 25)
-        cboEstado.Bounds = New Rectangle(col3_X, yFila4, 140, 25)
+        TextBoxVendedor.Bounds = New Rectangle(col1_X + 55, yFila4, 470, 25)
 
+        ' --- Bloque 2: Fecha, Estado y Observaciones (centro) ---
+        TextBoxFecha.Bounds = New Rectangle(col2_X, yFila2, 140, 25)
+        cboEstado.Bounds = New Rectangle(col2_X, yFila4, 140, 25)
+        TextBoxObservaciones.Bounds = New Rectangle(col2_X + 160, yFila4, 280, 25)
+
+        ' --- Tercera fila: Forma de pago (debajo, columna izquierda) ---
         lblFormaPago.Location = New Point(col1_X, yFila5)
-        cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 140, 25)
-        cboFormaPago.Font = New Font("Segoe UI", 10.5F)
+        lblFormaPago.BackColor = Color.Transparent
+        lblFormaPago.ForeColor = Color.WhiteSmoke
+        lblFormaPago.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+        cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 220, 25)
+        cboFormaPago.Font = New Font("Segoe UI", 10.0F)
 
-        'lblRuta.Location = New Point(col2_X, yFila5)
-        ' cboRuta.Bounds = New Rectangle(col2_X, yFila6, 530, 25)
-        ' cboRuta.Font = New Font("Segoe UI", 10.5F)
-
+        ' ============================================================
+        ' 3. LÍNEA DIVISORIA ENTRE CABECERA Y GRID
+        ' ============================================================
         Dim lineaDivisoria As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaDivisoria")
         If lineaDivisoria Is Nothing Then
-            lineaDivisoria = New Label() With {.Name = "LineaDivisoria", .BackColor = Color.FromArgb(120, 130, 140), .Height = 2}
+            lineaDivisoria = New Label() With {.Name = "LineaDivisoria", .BackColor = COLOR_LINEA_DIVISORIA, .Height = 2}
             Me.Controls.Add(lineaDivisoria)
         End If
 
-        Dim yTabla As Integer = 240
-        lineaDivisoria.Bounds = New Rectangle(margenIzq, yTabla - 20, anchoForm - (margenIzq * 2), 2)
+        Dim yTabla As Integer = yFila6 + 50
+        lineaDivisoria.Bounds = New Rectangle(margenIzq, yTabla - 18, anchoForm - (margenIzq * 2), 2)
         lineaDivisoria.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         lineaDivisoria.BringToFront()
 
-        Dim altoTabla As Integer = altoForm - yTabla - 140
+        ' ============================================================
+        ' 4. GRID DE LÍNEAS (ocupa todo el espacio central)
+        ' ============================================================
+        Dim altoTabla As Integer = altoForm - yTabla - 145
         DataGridView1.Bounds = New Rectangle(margenIzq, yTabla, anchoForm - (margenIzq * 2), altoTabla)
         DataGridView1.BackgroundColor = Me.BackColor
         DataGridView1.BorderStyle = BorderStyle.None
+        DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
 
+        ' ============================================================
+        ' 5. PANEL LATERAL DERECHO DE TOTALES (DESTACADO)
+        ' ============================================================
         Dim xDerecha As Integer = DataGridView1.Right
-        Dim yTotales As Integer = DataGridView1.Bottom + 10
+        Dim yTotales As Integer = DataGridView1.Bottom + 12
 
-        Dim panelTotales As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "PanelTotalesResumen")
+        Dim panelTotales As Panel = Me.Controls.OfType(Of Panel)().FirstOrDefault(Function(p) p.Name = "PanelTotales")
         If panelTotales Is Nothing Then
-            panelTotales = New Label() With {.Name = "PanelTotalesResumen", .BackColor = Color.FromArgb(25, 30, 40)}
+            panelTotales = New Panel() With {.Name = "PanelTotales", .BackColor = COLOR_PANEL_TOTALES,
+                                              .BorderStyle = BorderStyle.FixedSingle}
             Me.Controls.Add(panelTotales)
             panelTotales.SendToBack()
         End If
-        panelTotales.Bounds = New Rectangle(xDerecha - 320, yTotales, 150, 115) ' Ajustado dinamicamente luego
+        Dim panelAncho As Integer = 340
+        Dim panelAlto As Integer = 120
+        panelTotales.Bounds = New Rectangle(xDerecha - panelAncho, yTotales, panelAncho, panelAlto)
         panelTotales.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
 
-        TextBoxBase.Bounds = New Rectangle(xDerecha - 140, yTotales + 10, 120, 25)
-        TextBoxIva.Bounds = New Rectangle(xDerecha - 140, yTotales + 40, 120, 25)
-        LabelBase.Bounds = New Rectangle(xDerecha - 300, yTotales + 10, 150, 25)
-        LabelIva.Bounds = New Rectangle(xDerecha - 300, yTotales + 40, 150, 25)
+        ' Eliminar el viejo panel-Label si existía (limpieza de la versión anterior)
+        Dim viejoPanel As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "PanelTotalesResumen")
+        If viejoPanel IsNot Nothing Then Me.Controls.Remove(viejoPanel)
 
-        LabelBase.BackColor = Color.FromArgb(25, 30, 40) : LabelIva.BackColor = Color.FromArgb(25, 30, 40)
-        LabelBase.TextAlign = ContentAlignment.MiddleRight : LabelIva.TextAlign = ContentAlignment.MiddleRight
-        TextBoxBase.TextAlign = HorizontalAlignment.Right : TextBoxIva.TextAlign = HorizontalAlignment.Right
+        ' Posiciones internas del panel (coordenadas absolutas en el formulario)
+        Dim xPanelInt As Integer = xDerecha - panelAncho + 15
+        Dim wPanelInt As Integer = panelAncho - 30
 
-        TextBoxBase.BackColor = Color.FromArgb(25, 30, 40) : TextBoxBase.ForeColor = Color.White : TextBoxBase.BorderStyle = BorderStyle.None
-        TextBoxIva.BackColor = Color.FromArgb(25, 30, 40) : TextBoxIva.ForeColor = Color.White : TextBoxIva.BorderStyle = BorderStyle.None
+        ' Base imponible
+        LabelBase.BackColor = COLOR_PANEL_TOTALES
+        LabelBase.ForeColor = COLOR_TEXTO_SECUNDARIO
+        LabelBase.Font = New Font("Segoe UI", 10.0F, FontStyle.Regular)
+        LabelBase.TextAlign = ContentAlignment.MiddleLeft
+        LabelBase.Bounds = New Rectangle(xPanelInt, yTotales + 12, 150, 22)
+        LabelBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
 
+        TextBoxBase.BackColor = COLOR_PANEL_TOTALES
+        TextBoxBase.ForeColor = Color.White
+        TextBoxBase.Font = New Font("Segoe UI Semibold", 10.5F, FontStyle.Bold)
+        TextBoxBase.BorderStyle = BorderStyle.None
+        TextBoxBase.TextAlign = HorizontalAlignment.Right
+        TextBoxBase.Bounds = New Rectangle(xPanelInt + wPanelInt - 140, yTotales + 12, 140, 22)
+        TextBoxBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+
+        ' IVA
+        LabelIva.BackColor = COLOR_PANEL_TOTALES
+        LabelIva.ForeColor = COLOR_TEXTO_SECUNDARIO
+        LabelIva.Font = New Font("Segoe UI", 10.0F, FontStyle.Regular)
+        LabelIva.TextAlign = ContentAlignment.MiddleLeft
+        LabelIva.Bounds = New Rectangle(xPanelInt, yTotales + 38, 150, 22)
+        LabelIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+
+        TextBoxIva.BackColor = COLOR_PANEL_TOTALES
+        TextBoxIva.ForeColor = Color.White
+        TextBoxIva.Font = New Font("Segoe UI Semibold", 10.5F, FontStyle.Bold)
+        TextBoxIva.BorderStyle = BorderStyle.None
+        TextBoxIva.TextAlign = HorizontalAlignment.Right
+        TextBoxIva.Bounds = New Rectangle(xPanelInt + wPanelInt - 140, yTotales + 38, 140, 22)
+        TextBoxIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+
+        ' Línea separadora interna del panel
         Dim lineaTotal As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = "LineaTotales")
         If lineaTotal Is Nothing Then
-            lineaTotal = New Label() With {.Name = "LineaTotales", .BackColor = Color.FromArgb(100, 100, 100), .Height = 1}
+            lineaTotal = New Label() With {.Name = "LineaTotales", .BackColor = Color.FromArgb(80, 90, 105), .Height = 1}
             Me.Controls.Add(lineaTotal)
         End If
-        lineaTotal.Bounds = New Rectangle(xDerecha - 300, yTotales + 70, 280, 1)
+        lineaTotal.Bounds = New Rectangle(xPanelInt, yTotales + 68, wPanelInt, 1)
+        lineaTotal.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         lineaTotal.BringToFront()
 
-        Dim colorAcento As Color = Color.FromArgb(0, 150, 255)
+        ' TOTAL - destacado
         If Label7 IsNot Nothing Then
-            Label7.Bounds = New Rectangle(xDerecha - 300, yTotales + 80, 150, 30)
-            Label7.BackColor = Color.FromArgb(25, 30, 40) : Label7.TextAlign = ContentAlignment.MiddleRight
-            Label7.Font = New Font("Segoe UI", 13, FontStyle.Bold) : Label7.ForeColor = colorAcento
+            Label7.Text = "TOTAL"
+            Label7.BackColor = COLOR_PANEL_TOTALES
+            Label7.ForeColor = COLOR_ACENTO
+            Label7.Font = New Font("Segoe UI", 13.0F, FontStyle.Bold)
+            Label7.TextAlign = ContentAlignment.MiddleLeft
+            Label7.Bounds = New Rectangle(xPanelInt, yTotales + 78, 150, 32)
+            Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         End If
 
         If TextBoxTotalPresup IsNot Nothing Then
-            TextBoxTotalPresup.Bounds = New Rectangle(xDerecha - 140, yTotales + 80, 120, 30)
+            TextBoxTotalPresup.BackColor = COLOR_PANEL_TOTALES
+            TextBoxTotalPresup.ForeColor = COLOR_ACENTO
+            TextBoxTotalPresup.Font = New Font("Segoe UI", 16.0F, FontStyle.Bold)
+            TextBoxTotalPresup.BorderStyle = BorderStyle.None
             TextBoxTotalPresup.TextAlign = HorizontalAlignment.Right
-            TextBoxTotalPresup.Font = New Font("Segoe UI", 14, FontStyle.Bold) : TextBoxTotalPresup.ForeColor = colorAcento
-            TextBoxTotalPresup.BackColor = Color.FromArgb(25, 30, 40) : TextBoxTotalPresup.BorderStyle = BorderStyle.None
+            TextBoxTotalPresup.Bounds = New Rectangle(xPanelInt + wPanelInt - 180, yTotales + 78, 180, 32)
+            TextBoxTotalPresup.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         End If
 
-        Dim panelWidth As Integer = TextBoxBase.Right - LabelBase.Left + 20
-        panelTotales.Bounds = New Rectangle(xDerecha - panelWidth, yTotales, panelWidth, 115)
+        ' ============================================================
+        ' 6. BARRA INFERIOR DE BOTONES AGRUPADOS
+        ' ============================================================
+        Dim yBotones As Integer = DataGridView1.Bottom + 50
 
-        Dim yBotones As Integer = DataGridView1.Bottom + 45
+        ' Grupo A: acciones del documento (Guardar, Borrar, Nuevo)
+        EstilizarBoton(ButtonGuardar, margenIzq, yBotones, BTN_AZUL_PRIMARIO, Color.White)
+        EstilizarBoton(ButtonBorrar, margenIzq + 110, yBotones, BTN_ROJO_PELIGRO, Color.White)
+        EstilizarBoton(ButtonNuevoPresup, margenIzq + 220, yBotones, BTN_AZUL_PRIMARIO, Color.White)
 
-        EstilizarBoton(ButtonGuardar, margenIzq, yBotones, Color.FromArgb(0, 120, 215), Color.White)
-        EstilizarBoton(ButtonBorrar, margenIzq + 110, yBotones, Color.FromArgb(209, 52, 56), Color.White)
-        EstilizarBoton(ButtonNuevoPresup, margenIzq + 220, yBotones, Color.FromArgb(0, 120, 215), Color.White)
+        ' Separador 1 (vertical)
+        Dim sep1 As Label = ObtenerOCrearSeparador("SepGrupo1")
+        sep1.Bounds = New Rectangle(margenIzq + 332, yBotones + 4, 1, 27)
+        sep1.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
 
-        EstilizarBoton(ButtonBorrarLineas, margenIzq + 380, yBotones, Color.FromArgb(85, 85, 85), Color.White)
-        ButtonBorrarLineas.Text = "- Quitar Línea" : ButtonBorrarLineas.Width = 110
+        ' Grupo B: gestión de líneas
+        EstilizarBoton(ButtonNuevaLinea, margenIzq + 348, yBotones, BTN_VERDE_AÑADIR, Color.White)
+        ButtonNuevaLinea.Text = "+ Añadir Línea" : ButtonNuevaLinea.Width = 120
 
-        EstilizarBoton(ButtonNuevaLinea, margenIzq + 500, yBotones, Color.FromArgb(40, 140, 90), Color.White)
-        ButtonNuevaLinea.Text = "+ Añadir Línea" : ButtonNuevaLinea.Width = 110
+        EstilizarBoton(ButtonBorrarLineas, margenIzq + 478, yBotones, BTN_GRIS_NEUTRO, Color.White)
+        ButtonBorrarLineas.Text = "− Quitar Línea" : ButtonBorrarLineas.Width = 120
 
-        EstilizarBoton(ButtonAnterior, xDerecha - 560, yBotones, Me.BackColor, Color.White)
-        EstilizarBoton(ButtonSiguiente, xDerecha - 450, yBotones, Me.BackColor, Color.White)
+        ' Separador 2
+        Dim sep2 As Label = ObtenerOCrearSeparador("SepGrupo2")
+        sep2.Bounds = New Rectangle(margenIzq + 610, yBotones + 4, 1, 27)
+        sep2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
 
-        LabelStock.Location = New Point(margenIzq, DataGridView1.Bottom + 10)
+        ' Grupo C: navegación entre documentos (anclados al lado izquierdo de la barra)
+        EstilizarBoton(ButtonAnterior, margenIzq + 626, yBotones, COLOR_FONDO, Color.White)
+        ButtonAnterior.FlatAppearance.BorderColor = COLOR_TEXTO_SECUNDARIO
+        ButtonAnterior.FlatAppearance.BorderSize = 1
+        ButtonAnterior.Text = "◀ Anterior"
 
-        DataGridView1.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
-        Dim botonesAbajo As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPresup, ButtonBorrarLineas, ButtonNuevaLinea, ButtonAnterior, ButtonSiguiente, LabelStock}
-        For Each b In botonesAbajo : b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left : Next
+        EstilizarBoton(ButtonSiguiente, margenIzq + 736, yBotones, COLOR_FONDO, Color.White)
+        ButtonSiguiente.FlatAppearance.BorderColor = COLOR_TEXTO_SECUNDARIO
+        ButtonSiguiente.FlatAppearance.BorderSize = 1
+        ButtonSiguiente.Text = "Siguiente ▶"
 
-        TextBoxBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        TextBoxIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        If TextBoxTotalPresup IsNot Nothing Then TextBoxTotalPresup.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        LabelBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        LabelIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        If Label7 IsNot Nothing Then Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
-        lineaTotal.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
+        ' Anclamos los botones del lado izquierdo
+        Dim botonesAbajo As Control() = {ButtonGuardar, ButtonBorrar, ButtonNuevoPresup, ButtonNuevaLinea, ButtonBorrarLineas, ButtonAnterior, ButtonSiguiente}
+        For Each b In botonesAbajo
+            If b IsNot Nothing Then b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        Next
+
+        If LabelStock IsNot Nothing Then
+            LabelStock.Location = New Point(margenIzq, DataGridView1.Bottom + 14)
+            LabelStock.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        End If
     End Sub
+
+    Private Function ObtenerOCrearSeparador(nombre As String) As Label
+        Dim sep As Label = Me.Controls.OfType(Of Label)().FirstOrDefault(Function(l) l.Name = nombre)
+        If sep Is Nothing Then
+            sep = New Label() With {.Name = nombre, .BackColor = COLOR_SEPARADOR_GRUPO, .AutoSize = False}
+            Me.Controls.Add(sep)
+        End If
+        sep.BringToFront()
+        Return sep
+    End Function
 
     Private Sub EstilizarBoton(btn As Button, x As Integer, y As Integer, bg As Color, fg As Color)
         btn.Location = New Point(x, y)

@@ -170,28 +170,8 @@ Public Class FrmPedidosCompra
     End Sub
 
     Private Function GenerarProximoNumeroPedido() As String
-        Dim prefijo As String = "PEC-"
-        Dim nuevoNumero As String = $"{prefijo}001"
-        Try
-            Dim sql As String = "SELECT NumeroPedidoCompra FROM PedidosCompra WHERE NumeroPedidoCompra LIKE @patron ORDER BY NumeroPedidoCompra DESC LIMIT 1"
-
-            Dim c = ConexionBD.GetConnection()
-            If c.State <> ConnectionState.Open Then c.Open()
-
-            Using cmd As New SQLiteCommand(sql, c)
-                cmd.Parameters.AddWithValue("@patron", prefijo & "%")
-                Dim resultado = cmd.ExecuteScalar()
-                If resultado IsNot Nothing AndAlso Not IsDBNull(resultado) Then
-                    Dim partes As String() = resultado.ToString().Split("-"c)
-                    If partes.Length >= 2 AndAlso IsNumeric(partes(1)) Then
-                        nuevoNumero = $"{prefijo}{(CInt(partes(1)) + 1).ToString("D3")}"
-                    End If
-                End If
-            End Using
-        Catch
-            nuevoNumero = $"PEC-{DateTime.Now:HHmmss}"
-        End Try
-        Return nuevoNumero
+        ' Delegamos en NumeradorDocumentos para tener orden numérico (no lexicográfico).
+        Return NumeradorDocumentos.SiguienteNumero("PEC-", "PedidosCompra", "NumeroPedidoCompra")
     End Function
 #End Region
 
@@ -397,6 +377,7 @@ Public Class FrmPedidosCompra
 
         Catch ex As Exception
             If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("FrmPedidosCompra.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub

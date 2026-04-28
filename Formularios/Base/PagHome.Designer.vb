@@ -1,9 +1,9 @@
-﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+﻿<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()>
 Partial Class PagHome
     Inherits System.Windows.Forms.Form
 
     'Form reemplaza a Dispose para limpiar la lista de componentes.
-    <System.Diagnostics.DebuggerNonUserCode()> _
+    <System.Diagnostics.DebuggerNonUserCode()>
     Protected Overrides Sub Dispose(ByVal disposing As Boolean)
         Try
             If disposing AndAlso components IsNot Nothing Then
@@ -20,7 +20,7 @@ Partial Class PagHome
     'NOTA: el Diseñador de Windows Forms necesita el siguiente procedimiento
     'Se puede modificar usando el Diseñador de Windows Forms.  
     'No lo modifique con el editor de código.
-    <System.Diagnostics.DebuggerStepThrough()> _
+    <System.Diagnostics.DebuggerStepThrough()>
     Private Sub InitializeComponent()
         components = New ComponentModel.Container()
         Dim TreeNode1 As TreeNode = New TreeNode("Presupuestos")
@@ -64,7 +64,7 @@ Partial Class PagHome
         TvNavegacion.BorderStyle = BorderStyle.None
         TvNavegacion.Dock = DockStyle.Left
         TvNavegacion.DrawMode = TreeViewDrawMode.OwnerDrawText
-        TvNavegacion.Font = New Font("Segoe UI", 12F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
+        TvNavegacion.Font = New Font("Segoe UI", 12.0F, FontStyle.Bold, GraphicsUnit.Point, CByte(0))
         TvNavegacion.FullRowSelect = True
         TvNavegacion.ImageIndex = 0
         TvNavegacion.ImageList = ImageList1
@@ -210,7 +210,7 @@ Partial Class PagHome
         ' 
         ' PagHome
         ' 
-        AutoScaleDimensions = New SizeF(7F, 15F)
+        AutoScaleDimensions = New SizeF(7.0F, 15.0F)
         AutoScaleMode = AutoScaleMode.Font
         BackColor = Color.FromArgb(CByte(70), CByte(75), CByte(80))
         ClientSize = New Size(1536, 788)
@@ -241,5 +241,4 @@ Partial Class PagHome
     Friend WithEvents ToolStripTextBox1 As ToolStripTextBox
     Friend WithEvents Panel As Panel
     Friend WithEvents ImageList1 As ImageList
-    Friend WithEvents PictureBox1 As PictureBox
 End Class

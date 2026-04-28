@@ -166,7 +166,6 @@ Public Class FrmFacturas
                     End If
                 End Using
             End Using
-
             Dim sqlLin As String = "SELECT * FROM LineasAlbaran Where NumeroAlbaran = @num order by NumeroOrden ASC"
             Dim dtOrigen As New DataTable()
             Using cmd As New SQLiteCommand(sqlLin, c)
@@ -222,6 +221,7 @@ Public Class FrmFacturas
         Catch ex As Exception
         End Try
     End Sub
+
     Private Sub btnGuardar_Click(sender As Object, e As EventArgs) Handles ButtonGuardar.Click
         If String.IsNullOrWhiteSpace(TextBoxIdCliente.Text) Then MessageBox.Show("Falta el Cliente") : Return
 
@@ -264,6 +264,59 @@ Public Class FrmFacturas
             Dim sumaTotal As Decimal = sumaBase + sumaIva
 
             ' ==========================================
+            ' B') Datos fiscales del cliente
+            ' ==========================================
+            ' La factura emitida DEBE incluir el CIF/NIF del cliente (obligación legal en España).
+            ' Lo leemos directamente de la tabla Clientes para no depender de lo que haya en pantalla
+            ' (los TextBox son editables y podrían estar manipulados).
+            Dim cifCliente As Object = DBNull.Value
+            Dim nombreFiscalCliente As Object = TextBoxCliente.Text.Trim()
+            Dim direccionCliente As Object = If(String.IsNullOrWhiteSpace(TextBoxDireccion.Text), DBNull.Value, CType(TextBoxDireccion.Text.Trim(), Object))
+            Dim poblacionCliente As Object = If(String.IsNullOrWhiteSpace(TextBoxPoblacion.Text), DBNull.Value, CType(TextBoxPoblacion.Text.Trim(), Object))
+            Dim cpCliente As Object = If(String.IsNullOrWhiteSpace(TextBoxCP.Text), DBNull.Value, CType(TextBoxCP.Text.Trim(), Object))
+
+            If Not String.IsNullOrWhiteSpace(TextBoxIdCliente.Text) Then
+                Try
+                    Using cmdCli As New SQLiteCommand(
+                        "SELECT NombreFiscal, CIF, Direccion, Poblacion, CodigoPostal FROM Clientes WHERE CodigoCliente = @cod",
+                        c, trans)
+                        cmdCli.Parameters.AddWithValue("@cod", TextBoxIdCliente.Text.Trim())
+                        Using rCli = cmdCli.ExecuteReader()
+                            If rCli.Read() Then
+                                ' Sobrescribimos con los datos OFICIALES del cliente
+                                If Not IsDBNull(rCli("NombreFiscal")) AndAlso rCli("NombreFiscal").ToString() <> "" Then
+                                    nombreFiscalCliente = rCli("NombreFiscal").ToString()
+                                End If
+                                If Not IsDBNull(rCli("CIF")) AndAlso rCli("CIF").ToString() <> "" Then
+                                    cifCliente = rCli("CIF").ToString()
+                                End If
+                                ' Si los TextBox de dirección están vacíos, usamos los del cliente
+                                If IsDBNull(direccionCliente) AndAlso Not IsDBNull(rCli("Direccion")) Then direccionCliente = rCli("Direccion")
+                                If IsDBNull(poblacionCliente) AndAlso Not IsDBNull(rCli("Poblacion")) Then poblacionCliente = rCli("Poblacion")
+                                If IsDBNull(cpCliente) AndAlso Not IsDBNull(rCli("CodigoPostal")) Then cpCliente = rCli("CodigoPostal")
+                            End If
+                        End Using
+                    End Using
+                Catch
+                    ' Si falla la consulta del cliente, seguimos con lo que haya en pantalla
+                End Try
+            End If
+
+            ' Aviso (no bloqueante) si el cliente no tiene CIF: una factura sin CIF del receptor
+            ' no es válida legalmente, así que el usuario debe ser consciente.
+            If IsDBNull(cifCliente) Then
+                If MessageBox.Show(
+                    "El cliente no tiene CIF/NIF registrado en su ficha." & vbCrLf & vbCrLf &
+                    "Una factura sin CIF del receptor no es válida legalmente." & vbCrLf &
+                    "¿Quieres guardar igualmente?",
+                    "Aviso fiscal",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning) = DialogResult.No Then
+                    trans.Rollback()
+                    Return
+                End If
+            End If
+
+            ' ==========================================
             ' B) Guardar Cabecera (FacturasVenta)
             ' ==========================================
             Dim sql As String
@@ -292,15 +345,19 @@ Public Class FrmFacturas
                 cmd.Parameters.AddWithValue("@iva", sumaIva)
                 cmd.Parameters.AddWithValue("@total", sumaTotal)
 
-                cmd.Parameters.AddWithValue("@cobrada", 0) ' Por defecto 0 (Falso)
+                ' Sincronizamos el booleano Cobrada con el Estado del combo:
+                ' Si el usuario marca la factura como "Cobrada", el flag pasa a 1.
+                ' Cualquier otro estado (Pendiente, Vencida, Cancelada) -> 0.
+                Dim cobradaFlag As Integer = If(cboEstado.Text = EstadosDocumento.FACTURA_COBRADA, 1, 0)
+                cmd.Parameters.AddWithValue("@cobrada", cobradaFlag)
                 cmd.Parameters.AddWithValue("@fpago", If(cboFormaPago.SelectedIndex <> -1, cboFormaPago.SelectedValue, DBNull.Value))
                 cmd.Parameters.AddWithValue("@fvenc", DateTimePickerFecha.Value)
 
-                cmd.Parameters.AddWithValue("@fiscal", TextBoxCliente.Text)
-                cmd.Parameters.AddWithValue("@cif", DBNull.Value) ' Lo ideal es cargarlo desde el cliente
-                cmd.Parameters.AddWithValue("@dir", TextBoxDireccion.Text)
-                cmd.Parameters.AddWithValue("@pob", TextBoxPoblacion.Text)
-                cmd.Parameters.AddWithValue("@cp", TextBoxCP.Text)
+                cmd.Parameters.AddWithValue("@fiscal", nombreFiscalCliente)
+                cmd.Parameters.AddWithValue("@cif", cifCliente) ' Cargado desde Clientes.CIF (antes era siempre NULL)
+                cmd.Parameters.AddWithValue("@dir", direccionCliente)
+                cmd.Parameters.AddWithValue("@pob", poblacionCliente)
+                cmd.Parameters.AddWithValue("@cp", cpCliente)
 
                 cmd.Parameters.AddWithValue("@vend", If(String.IsNullOrWhiteSpace(TextBoxIdVendedor.Text), DBNull.Value, TextBoxIdVendedor.Text))
                 cmd.Parameters.AddWithValue("@ruta", If(cboRuta.SelectedIndex <> -1, cboRuta.SelectedValue, DBNull.Value))
@@ -411,9 +468,10 @@ Public Class FrmFacturas
             ' =========================================================
             If TextBoxAlbaranOrigen.Tag IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(TextBoxAlbaranOrigen.Tag.ToString()) Then
                 ' Suponiendo que facturas desde Albaranes:
-                Dim sqlEstado As String = "UPDATE Albaranes SET Estado = 'Facturado' WHERE NumeroAlbaran = @idOrigen"
+                Dim sqlEstado As String = "UPDATE Albaranes SET Estado = @estado WHERE NumeroAlbaran = @idOrigen"
                 Using cmdEst As New SQLiteCommand(sqlEstado, c)
                     cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@estado", EstadosDocumento.ALBARAN_FACTURADO)
                     cmdEst.Parameters.AddWithValue("@idOrigen", TextBoxAlbaranOrigen.Tag.ToString())
                     cmdEst.ExecuteNonQuery()
                 End Using
@@ -424,6 +482,7 @@ Public Class FrmFacturas
 
         Catch ex As Exception
             If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("FrmFacturas.Guardar", ex)
             MessageBox.Show("Error crítico al guardar la factura: " & ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
@@ -629,24 +688,8 @@ Public Class FrmFacturas
         If DataGridView1.Columns.Contains("ID_Linea") Then DataGridView1.Columns("ID_Linea").Visible = False
     End Sub
     Private Function GenerarProximoNumeroFactura() As String
-        Dim prefijo As String = "FAC-"
-        Dim nuevo As String = "FAC-001"
-        Try
-            Dim c = ConexionBD.GetConnection()
-            If c.State <> ConnectionState.Open Then c.Open()
-            Dim cmd As New SQLiteCommand("SELECT NumeroFactura FROM FacturasVenta WHERE NumeroFactura LIKE @pat ORDER BY NumeroFactura DESC LIMIT 1", c)
-            cmd.Parameters.AddWithValue("@pat", prefijo & "%")
-            Dim res = cmd.ExecuteScalar()
-            If res IsNot Nothing AndAlso Not IsDBNull(res) Then
-                Dim parts = res.ToString().Split("-"c)
-                If parts.Length >= 2 Then
-                    nuevo = prefijo & (Convert.ToInt32(parts(parts.Length - 1)) + 1).ToString("D3")
-                End If
-            End If
-        Catch
-            nuevo = "FAC-" & DateTime.Now.Ticks.ToString().Substring(12)
-        End Try
-        Return nuevo
+        ' Delegamos en NumeradorDocumentos para tener orden numérico (no lexicográfico).
+        Return NumeradorDocumentos.SiguienteNumero("FAC-", "FacturasVenta", "NumeroFactura")
     End Function
     Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
         Using frm As New FrmBuscador()
@@ -658,18 +701,25 @@ Public Class FrmFacturas
     End Sub
     Private Sub CalcularTotales()
         Dim base As Decimal = 0
+        Dim ivaTot As Decimal = 0
         If _dtLineas IsNot Nothing Then
             For Each r As DataRow In _dtLineas.Rows
                 If r.RowState <> DataRowState.Deleted Then
                     Dim c As Decimal = 0 : Decimal.TryParse(r("Cantidad").ToString(), c)
                     Dim p As Decimal = 0 : Decimal.TryParse(r("PrecioUnitario").ToString(), p)
                     Dim d As Decimal = 0 : Decimal.TryParse(r("Descuento").ToString(), d)
-                    base += (c * p) * (1 - (d / 100))
+                    Dim iva As Decimal = 21
+                    If _dtLineas.Columns.Contains("PorcentajeIVA") AndAlso Not IsDBNull(r("PorcentajeIVA")) Then
+                        Decimal.TryParse(r("PorcentajeIVA").ToString(), iva)
+                    End If
+                    Dim baseLinea As Decimal = (c * p) * (1 - (d / 100))
+                    base += baseLinea
+                    ivaTot += baseLinea * (iva / 100) ' IVA real por línea, no 21% fijo
                 End If
             Next
         End If
         TextBoxBase.Text = base.ToString("C2")
-        TextBoxTotalAlb.Text = (base * 1.21D).ToString("C2")
+        TextBoxTotalAlb.Text = (base + ivaTot).ToString("C2")
     End Sub
     Private Sub DataGridView1_CellEndEdit(sender As Object, e As DataGridViewCellEventArgs) Handles DataGridView1.CellEndEdit
         Dim fila = DataGridView1.Rows(e.RowIndex)
@@ -801,6 +851,13 @@ Public Class FrmFacturas
         LimpiarFormulario()
     End Sub
     Private Sub ButtonBorrar_Click(sender As Object, e As EventArgs) Handles ButtonBorrar.Click
+        ' Solo administradores pueden borrar facturas: una vez emitidas, una factura tiene
+        ' implicaciones legales/fiscales y no debería poder eliminarla cualquier usuario.
+        If Not ComunSesionActual.EsAdministrador() Then
+            MessageBox.Show("Solo un Administrador puede eliminar facturas.", "Permiso denegado", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Return
+        End If
+
         ' 1. Seguridad: Si no hay factura cargada (es nueva), no hacemos nada
         If String.IsNullOrEmpty(_numeroFacturaActual) Then
             MessageBox.Show("No puedes borrar una factura que aún no se ha guardado.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Information)

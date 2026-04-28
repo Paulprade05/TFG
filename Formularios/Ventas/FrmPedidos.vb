@@ -193,29 +193,8 @@ Public Class FrmPedidos
     End Sub
 
     Private Function GenerarProximoNumeroPedido() As String
-        Dim prefijo As String = "PED-"
-        Dim nuevoNumero As String = $"{prefijo}001"
-        Try
-            Dim sql As String = "SELECT NumeroPedido FROM Pedidos WHERE NumeroPedido LIKE @patron ORDER BY NumeroPedido DESC LIMIT 1"
-
-            ' --- SOLUCIÓN: Usamos Dim en lugar de Using para NO destruir la conexión compartida ---
-            Dim c = ConexionBD.GetConnection()
-            If c.State <> ConnectionState.Open Then c.Open()
-
-            Using cmd As New SQLiteCommand(sql, c)
-                cmd.Parameters.AddWithValue("@patron", prefijo & "%")
-                Dim resultado = cmd.ExecuteScalar()
-                If resultado IsNot Nothing Then
-                    Dim partes As String() = resultado.ToString().Split("-"c)
-                    If partes.Length >= 2 AndAlso IsNumeric(partes(1)) Then
-                        nuevoNumero = $"{prefijo}{(CInt(partes(1)) + 1).ToString("D3")}"
-                    End If
-                End If
-            End Using
-        Catch
-            nuevoNumero = $"PED-{DateTime.Now:HHmmss}"
-        End Try
-        Return nuevoNumero
+        ' Delegamos en NumeradorDocumentos para tener orden numérico (no lexicográfico).
+        Return NumeradorDocumentos.SiguienteNumero("PED-", "Pedidos", "NumeroPedido")
     End Function
 #End Region
 
@@ -410,9 +389,10 @@ Public Class FrmPedidos
             ' MAGIA DE ESTADOS: Marcar Presupuesto como Convertido
             ' =========================================================
             If Not String.IsNullOrWhiteSpace(TextBoxIdPresupuesto.Text) Then
-                Dim sqlEstado As String = "UPDATE Presupuestos SET Estado = 'Convertido' WHERE NumeroPresupuesto = @idPresu"
+                Dim sqlEstado As String = "UPDATE Presupuestos SET Estado = @estado WHERE NumeroPresupuesto = @idPresu"
                 Using cmdEst As New SQLiteCommand(sqlEstado, c)
                     cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@estado", EstadosDocumento.PRESUPUESTO_CONVERTIDO)
                     cmdEst.Parameters.AddWithValue("@idPresu", TextBoxIdPresupuesto.Text.Trim())
                     cmdEst.ExecuteNonQuery()
                 End Using
@@ -423,6 +403,7 @@ Public Class FrmPedidos
 
         Catch ex As Exception
             If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("FrmPedidos.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub
@@ -827,11 +808,24 @@ Public Class FrmPedidos
 
     Private Sub TextBoxIdVendedor_Leave(sender As Object, e As EventArgs) Handles TextBoxIdVendedor.Leave
         If String.IsNullOrWhiteSpace(TextBoxIdVendedor.Text) Then TextBoxVendedor.Text = "" : Return
+
+        ' Validamos primero que el ID sea numérico antes de tocar la BD.
+        ' ID_Vendedor es INTEGER, por lo que cualquier texto no numérico no encontrará vendedor.
+        Dim idVend As Integer
+        If Not Integer.TryParse(TextBoxIdVendedor.Text.Trim(), idVend) OrElse idVend <= 0 Then
+            TextBoxVendedor.Text = "NO EXISTE"
+            Return
+        End If
+
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
-            Dim r = New SQLiteCommand("SELECT Nombre FROM Vendedores WHERE ID_Vendedor='" & TextBoxIdVendedor.Text & "'", c).ExecuteScalar()
-            TextBoxVendedor.Text = If(r IsNot Nothing, r.ToString(), "NO EXISTE")
+            ' Usamos parámetros (NUNCA concatenar texto del usuario en SQL — riesgo de inyección)
+            Using cmd As New SQLiteCommand("SELECT Nombre FROM Vendedores WHERE ID_Vendedor = @id", c)
+                cmd.Parameters.AddWithValue("@id", idVend)
+                Dim r = cmd.ExecuteScalar()
+                TextBoxVendedor.Text = If(r IsNot Nothing AndAlso Not IsDBNull(r), r.ToString(), "NO EXISTE")
+            End Using
         Catch
         End Try
     End Sub
@@ -913,7 +907,7 @@ Public Class FrmPedidos
         btnBuscarPedido.ForeColor = Color.White
         btnBuscarPedido.FlatStyle = FlatStyle.Flat
         btnBuscarPedido.FlatAppearance.BorderSize = 0
-        btnBuscarPedido.Font = New Font("Segoe UI", 11F, FontStyle.Bold)
+        btnBuscarPedido.Font = New Font("Segoe UI", 11.0F, FontStyle.Bold)
         btnBuscarPedido.Cursor = Cursors.Hand
         btnBuscarPedido.Text = "🔍"
         btnBuscarPedido.BringToFront()
@@ -987,7 +981,7 @@ Public Class FrmPedidos
             btnBuscarPresupuesto.ForeColor = Color.White
             btnBuscarPresupuesto.FlatStyle = FlatStyle.Flat
             btnBuscarPresupuesto.FlatAppearance.BorderSize = 0
-            btnBuscarPresupuesto.Font = New Font("Segoe UI", 11F, FontStyle.Bold)
+            btnBuscarPresupuesto.Font = New Font("Segoe UI", 11.0F, FontStyle.Bold)
             btnBuscarPresupuesto.Cursor = Cursors.Hand
             btnBuscarPresupuesto.Text = "🔍"
         End If
@@ -998,14 +992,14 @@ Public Class FrmPedidos
         lblFormaPago.ForeColor = Color.WhiteSmoke
         lblFormaPago.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
         cboFormaPago.Bounds = New Rectangle(col1_X, yFila6, 220, 25)
-        cboFormaPago.Font = New Font("Segoe UI", 10F)
+        cboFormaPago.Font = New Font("Segoe UI", 10.0F)
 
         lblRuta.Location = New Point(col1_X + 240, yFila5)
         lblRuta.BackColor = Color.Transparent
         lblRuta.ForeColor = Color.WhiteSmoke
         lblRuta.Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
         cboRuta.Bounds = New Rectangle(col1_X + 240, yFila6, 400, 25)
-        cboRuta.Font = New Font("Segoe UI", 10F)
+        cboRuta.Font = New Font("Segoe UI", 10.0F)
 
         ' ============================================================
         ' 3. LÍNEA DIVISORIA ENTRE CABECERA Y GRID
@@ -1059,7 +1053,7 @@ Public Class FrmPedidos
         ' Base imponible
         LabelBase.BackColor = COLOR_PANEL_TOTALES
         LabelBase.ForeColor = COLOR_TEXTO_SECUNDARIO
-        LabelBase.Font = New Font("Segoe UI", 10F, FontStyle.Regular)
+        LabelBase.Font = New Font("Segoe UI", 10.0F, FontStyle.Regular)
         LabelBase.TextAlign = ContentAlignment.MiddleLeft
         LabelBase.Bounds = New Rectangle(xPanelInt, yTotales + 12, 150, 22)
         LabelBase.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
@@ -1075,7 +1069,7 @@ Public Class FrmPedidos
         ' IVA
         LabelIva.BackColor = COLOR_PANEL_TOTALES
         LabelIva.ForeColor = COLOR_TEXTO_SECUNDARIO
-        LabelIva.Font = New Font("Segoe UI", 10F, FontStyle.Regular)
+        LabelIva.Font = New Font("Segoe UI", 10.0F, FontStyle.Regular)
         LabelIva.TextAlign = ContentAlignment.MiddleLeft
         LabelIva.Bounds = New Rectangle(xPanelInt, yTotales + 38, 150, 22)
         LabelIva.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
@@ -1103,7 +1097,7 @@ Public Class FrmPedidos
             Label7.Text = "TOTAL"
             Label7.BackColor = COLOR_PANEL_TOTALES
             Label7.ForeColor = COLOR_ACENTO
-            Label7.Font = New Font("Segoe UI", 13F, FontStyle.Bold)
+            Label7.Font = New Font("Segoe UI", 13.0F, FontStyle.Bold)
             Label7.TextAlign = ContentAlignment.MiddleLeft
             Label7.Bounds = New Rectangle(xPanelInt, yTotales + 78, 150, 32)
             Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
@@ -1112,7 +1106,7 @@ Public Class FrmPedidos
         If TextBoxTotalPed IsNot Nothing Then
             TextBoxTotalPed.BackColor = COLOR_PANEL_TOTALES
             TextBoxTotalPed.ForeColor = COLOR_ACENTO
-            TextBoxTotalPed.Font = New Font("Segoe UI", 16F, FontStyle.Bold)
+            TextBoxTotalPed.Font = New Font("Segoe UI", 16.0F, FontStyle.Bold)
             TextBoxTotalPed.BorderStyle = BorderStyle.None
             TextBoxTotalPed.TextAlign = HorizontalAlignment.Right
             TextBoxTotalPed.Bounds = New Rectangle(xPanelInt + wPanelInt - 180, yTotales + 78, 180, 32)

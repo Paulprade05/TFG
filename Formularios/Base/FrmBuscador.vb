@@ -95,11 +95,17 @@ Public Class FrmBuscador
                 ' ============================================
                 Case "Clientes"
                     Me.Text = "Buscar Cliente"
-                    sql = "SELECT ID_Cliente AS ID, NombreFiscal AS Nombre, CIF, Poblacion FROM Clientes WHERE Activo = 1"
+                    ' La PK real de Clientes es CodigoCliente (TEXT), NO ID_Cliente.
+                    ' Antes este SELECT lanzaba "no such column: ID_Cliente" en runtime.
+                    sql = "SELECT CodigoCliente AS ID, NombreFiscal AS Nombre, CIF, Poblacion FROM Clientes WHERE Activo = 1 ORDER BY NombreFiscal"
 
                 Case "Articulos"
                     Me.Text = "Buscar Artículo"
-                    sql = "SELECT ID_Articulo AS ID, CodigoReferencia AS Codigo, Descripcion, PrecioVenta, StockActual AS Stock FROM Articulos WHERE Activo = 1"
+                    sql = "SELECT ID_Articulo AS ID, CodigoReferencia AS Codigo, Descripcion, PrecioVenta, StockActual AS Stock FROM Articulos WHERE Activo = 1 ORDER BY Descripcion"
+
+                Case "Proveedores"
+                    Me.Text = "Buscar Proveedor"
+                    sql = "SELECT CodigoProveedor AS ID, NombreFiscal AS Nombre, CIF, Poblacion FROM Proveedores WHERE Activo = 1 ORDER BY NombreFiscal"
 
             End Select
 
@@ -112,8 +118,8 @@ Public Class FrmBuscador
 
             DataGridView1.DataSource = _dtDatos
 
-            ' Ocultamos la columna ID solo si es numérica interna (Clientes/Artículos)
-            If DataGridView1.Columns.Contains("ID") AndAlso (TablaABuscar = "Clientes" Or TablaABuscar = "Articulos") Then
+            ' Ocultamos la columna ID interna para los maestros (mostramos solo Nombre, CIF, etc.)
+            If DataGridView1.Columns.Contains("ID") AndAlso (TablaABuscar = "Clientes" Or TablaABuscar = "Articulos" Or TablaABuscar = "Proveedores") Then
                 DataGridView1.Columns("ID").Visible = False
             End If
 
@@ -129,8 +135,8 @@ Public Class FrmBuscador
             Select Case TablaABuscar
                 Case "Presupuestos", "Pedidos", "Albaranes", "PedidosCompra", "AlbaranesCompra", "FacturasCompra"
                     _dtDatos.DefaultView.RowFilter = $"[Nº Doc] LIKE '%{filtro}%' OR Tercero LIKE '%{filtro}%'"
-                Case "Clientes"
-                    _dtDatos.DefaultView.RowFilter = $"Nombre LIKE '%{filtro}%' OR CIF LIKE '%{filtro}%'"
+                Case "Clientes", "Proveedores"
+                    _dtDatos.DefaultView.RowFilter = $"Nombre LIKE '%{filtro}%' OR CIF LIKE '%{filtro}%' OR ID LIKE '%{filtro}%'"
                 Case "Articulos"
                     _dtDatos.DefaultView.RowFilter = $"Descripcion LIKE '%{filtro}%' OR Codigo LIKE '%{filtro}%'"
             End Select
@@ -158,6 +164,7 @@ Public Class FrmBuscador
                 Case "Presupuestos", "Pedidos", "Albaranes", "PedidosCompra", "AlbaranesCompra", "FacturasCompra"
                     valorRecuperado = fila.Cells("Nº Doc").Value.ToString()
                 Case Else
+                    ' Maestros: Clientes, Proveedores y Articulos. Todos exponen su PK como "ID".
                     valorRecuperado = fila.Cells("ID").Value.ToString()
             End Select
 

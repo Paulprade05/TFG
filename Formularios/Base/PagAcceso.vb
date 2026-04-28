@@ -23,11 +23,16 @@ Public Class PagAcceso
                             (Screen.PrimaryScreen.WorkingArea.Height - Me.Height) \ 2)
         ' Cargar las empresas en el ComboBox
         CargarEmpresas()
-        ' Leer los datos guardados de la última sesión
+        ' Solo recordamos el NOMBRE de usuario, nunca la contraseña (por seguridad).
+        ' Limpiamos también cualquier SavedPass que pudiera quedar de versiones anteriores.
+        If Not String.IsNullOrEmpty(My.Settings.SavedPass) Then
+            My.Settings.SavedPass = ""
+            My.Settings.Save()
+        End If
         If My.Settings.SavedUser <> "" Then
             TextBoxUsuario.Text = My.Settings.SavedUser
-            TextBoxPassword.Text = My.Settings.SavedPass
             CheckBoxRecordar.Checked = True
+            TextBoxPassword.Focus()
         End If
 
         Me.Refresh()
@@ -199,38 +204,81 @@ Public Class PagAcceso
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
 
-            ' CONSULTA A LA BASE DE DATOS (Asegúrate de que tu tabla se llama "Usuarios" y las columnas "Usuario" y "Contrasena")
-            ' SI SE LLAMAN DISTINTO, CAMBIA LOS NOMBRES AQUÍ
-            Dim sql As String = "SELECT COUNT(*) FROM Usuarios WHERE NombreUsuario = @u AND Password = @p"
+            ' Buscamos al usuario por nombre y leemos sus datos para verificar la contraseña en código
+            ' (no en SQL), porque la contraseña está hasheada con salt único y no se puede comparar
+            ' directamente con un WHERE.
+            Dim sql As String = "SELECT ID_Usuario, Password, Rol, NombreCompleto, Activo FROM Usuarios WHERE NombreUsuario = @u LIMIT 1"
             Using cmd As New SQLiteCommand(sql, c)
                 cmd.Parameters.AddWithValue("@u", usr)
-                cmd.Parameters.AddWithValue("@p", pwd)
+                Using r = cmd.ExecuteReader()
+                    If Not r.Read() Then
+                        MessageBox.Show("Usuario o contraseña incorrectos. Revisa tus credenciales.", "Acceso Denegado", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        Return
+                    End If
 
-                Dim existe As Integer = Convert.ToInt32(cmd.ExecuteScalar())
+                    Dim idUser As Integer = Convert.ToInt32(r("ID_Usuario"))
+                    Dim passBD As String = If(IsDBNull(r("Password")), "", r("Password").ToString())
+                    Dim rol As String = If(IsDBNull(r("Rol")), "", r("Rol").ToString())
+                    Dim nombreCompleto As String = If(IsDBNull(r("NombreCompleto")), "", r("NombreCompleto").ToString())
+                    Dim activo As Boolean = (Not IsDBNull(r("Activo"))) AndAlso Convert.ToInt32(r("Activo")) = 1
+                    r.Close()
 
-                If existe > 0 Then
-                    ' ¡EL USUARIO EXISTE Y LA PASS ES CORRECTA!
+                    If Not activo Then
+                        MessageBox.Show("Este usuario está desactivado. Contacta con el administrador.", "Acceso Denegado", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        Return
+                    End If
 
-                    ' Guardamos o borramos las credenciales según el CheckBox
+                    If Not PasswordHasher.Verificar(pwd, passBD) Then
+                        MessageBox.Show("Usuario o contraseña incorrectos. Revisa tus credenciales.", "Acceso Denegado", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                        Return
+                    End If
+
+                    ' --- Si la contraseña en BD seguía en texto plano, la migramos a hash ahora ---
+                    If PasswordHasher.NecesitaMigracion(passBD) Then
+                        Try
+                            Dim nuevoHash As String = PasswordHasher.Hashear(pwd)
+                            Using cmdMig As New SQLiteCommand("UPDATE Usuarios SET Password=@p WHERE ID_Usuario=@id", c)
+                                cmdMig.Parameters.AddWithValue("@p", nuevoHash)
+                                cmdMig.Parameters.AddWithValue("@id", idUser)
+                                cmdMig.ExecuteNonQuery()
+                            End Using
+                        Catch
+                            ' Si falla la migración, no rompemos el login. Se reintentará en el próximo acceso.
+                        End Try
+                    End If
+
+                    ' --- Actualizar UltimoAcceso ---
+                    Try
+                        Using cmdAcc As New SQLiteCommand("UPDATE Usuarios SET UltimoAcceso=@f WHERE ID_Usuario=@id", c)
+                            cmdAcc.Parameters.AddWithValue("@f", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                            cmdAcc.Parameters.AddWithValue("@id", idUser)
+                            cmdAcc.ExecuteNonQuery()
+                        End Using
+                    Catch
+                        ' No bloqueante.
+                    End Try
+
+                    ' --- Recordar SOLO el nombre de usuario, NUNCA la contraseña en disco ---
                     If CheckBoxRecordar.Checked Then
                         My.Settings.SavedUser = usr
-                        My.Settings.SavedPass = pwd
                     Else
                         My.Settings.SavedUser = ""
-                        My.Settings.SavedPass = ""
                     End If
-                    My.Settings.Save() ' Fuerza el guardado en el disco
+                    My.Settings.SavedPass = "" ' Por seguridad, nos aseguramos de NO dejar la contraseña guardada
+                    My.Settings.Save()
 
+                    ' --- Sesión completa ---
                     ComunSesionActual.Usuario = usr
-                    ComunSesionActual.Contrasena = pwd
+                    ComunSesionActual.Contrasena = "" ' No guardamos la pass en memoria de la app
+                    ComunSesionActual.IdUsuario = idUser
+                    ComunSesionActual.Rol = rol
+                    ComunSesionActual.NombreCompleto = nombreCompleto
 
                     Dim PagHome As New PagHome()
                     AddHandler PagHome.FormClosed, Sub(s, args) Me.Close()
                     PagHome.Show()
                     Me.Hide()
-                Else
-                    MessageBox.Show("Usuario o contraseña incorrectos. Revisa tus credenciales.", "Acceso Denegado", MessageBoxButtons.OK, MessageBoxIcon.Error)
-                End If
+                End Using
             End Using
 
         Catch ex As Exception

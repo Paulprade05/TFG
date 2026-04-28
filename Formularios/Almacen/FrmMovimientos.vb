@@ -22,7 +22,7 @@ Public Class FrmMovimientos
     Private Sub FrmMovimientosAlmacen_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.Text = "Historial de Movimientos de Almacén"
         Me.BackColor = Color.FromArgb(70, 75, 80) ' Tema oscuro premium
-        Me.MinimumSize = New Size(1000, 600)
+        Me.MinimumSize = New Size(1050, 670)
 
         ' Ajustamos las fechas por defecto (Últimos 30 días)
         dtpDesde.Format = DateTimePickerFormat.Short
@@ -38,35 +38,102 @@ Public Class FrmMovimientos
     End Sub
 
     ' =========================================================
-    ' 3. CONSTRUCTOR DE LA INTERFAZ
+    ' 3. CONSTRUCTOR DE LA INTERFAZ (Diseño Modernizado)
     ' =========================================================
+
+    ' --- PALETA DE COLORES CENTRALIZADA (idéntica al resto de módulos) ---
+    Private Shared ReadOnly COLOR_FONDO As Color = Color.FromArgb(70, 75, 80)
+    Private Shared ReadOnly COLOR_BANDA As Color = Color.FromArgb(40, 50, 70)
+    Private Shared ReadOnly COLOR_PANEL_TOTALES As Color = Color.FromArgb(25, 30, 40)
+    Private Shared ReadOnly COLOR_ACENTO As Color = Color.FromArgb(0, 150, 255)
+    Private Shared ReadOnly COLOR_TEXTO_SECUNDARIO As Color = Color.FromArgb(170, 180, 195)
+    Private Shared ReadOnly COLOR_LINEA_DIVISORIA As Color = Color.FromArgb(120, 130, 140)
+    Private Shared ReadOnly COLOR_SEPARADOR_GRUPO As Color = Color.FromArgb(95, 105, 120)
+
+    ' --- COLORES SEMÁNTICOS DE BOTONES ---
+    Private Shared ReadOnly BTN_AZUL_PRIMARIO As Color = Color.FromArgb(0, 120, 215)
+    Private Shared ReadOnly BTN_ROJO_PELIGRO As Color = Color.FromArgb(209, 52, 56)
+    Private Shared ReadOnly BTN_VERDE_AÑADIR As Color = Color.FromArgb(40, 140, 90)
+    Private Shared ReadOnly BTN_GRIS_NEUTRO As Color = Color.FromArgb(85, 85, 85)
+
     Private Sub ConstruirInterfaz()
         Dim margenIzq As Integer = 30
-        Dim yFila1 As Integer = 30
+        Dim anchoForm As Integer = Me.ClientSize.Width
+
+        ' ============================================================
+        ' 1. BANDA SUPERIOR CON TÍTULO
+        ' ============================================================
+        Dim alturaBanda As Integer = 60
+
+        Dim bandaSuperior As New Panel() With {
+            .Name = "BandaSuperior",
+            .BackColor = COLOR_BANDA,
+            .Bounds = New Rectangle(0, 0, anchoForm, alturaBanda),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        }
+        Me.Controls.Add(bandaSuperior)
+        bandaSuperior.SendToBack()
+
+        Dim lblTitulo As New Label() With {
+            .Name = "LblTituloDoc",
+            .Text = "HISTORIAL DE MOVIMIENTOS",
+            .AutoSize = False,
+            .BackColor = COLOR_BANDA,
+            .ForeColor = Color.White,
+            .TextAlign = ContentAlignment.MiddleLeft,
+            .Font = New Font("Segoe UI", 18, FontStyle.Bold),
+            .Bounds = New Rectangle(margenIzq, 0, 600, alturaBanda)
+        }
+        Me.Controls.Add(lblTitulo)
+        lblTitulo.BringToFront()
+
+        ' ============================================================
+        ' 2. ZONA DE FILTROS (debajo de la banda)
+        ' ============================================================
+        Dim yFila1 As Integer = alturaBanda + 25
 
         ' --- Filtros ---
         CrearFiltro("Filtrar por Artículo", cboFiltroArticulo, margenIzq, yFila1, 350)
         CrearFiltro("Desde Fecha", dtpDesde, margenIzq + 380, yFila1, 130)
         CrearFiltro("Hasta Fecha", dtpHasta, margenIzq + 540, yFila1, 130)
 
-        ' --- Botones de Filtro ---
-        ConfigurarBoton(btnFiltrar, "🔍 Filtrar", margenIzq + 700, yFila1 + 22, Color.FromArgb(0, 120, 215))
-        ConfigurarBoton(btnLimpiar, "Limpiar", margenIzq + 810, yFila1 + 22, Color.FromArgb(85, 85, 85))
+        ' --- Botones de filtro alineados con los textboxes (a la altura del valor) ---
+        EstilizarBoton(btnFiltrar, "🔍 Filtrar", margenIzq + 700, yFila1 + 23, BTN_AZUL_PRIMARIO, Color.White)
+        EstilizarBoton(btnLimpiar, "Limpiar", margenIzq + 810, yFila1 + 23, BTN_GRIS_NEUTRO, Color.White)
 
-        ' --- Línea Divisoria ---
-        Dim linea As New Label() With {.Bounds = New Rectangle(margenIzq, yFila1 + 70, Me.ClientSize.Width - (margenIzq * 2), 2), .BackColor = Color.FromArgb(100, 110, 120), .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right}
+        ' ============================================================
+        ' 3. LÍNEA DIVISORIA ENTRE FILTROS Y GRID
+        ' ============================================================
+        Dim yLinea As Integer = yFila1 + 75
+        Dim linea As New Label() With {
+            .Name = "LineaDivisoria",
+            .Bounds = New Rectangle(margenIzq, yLinea, anchoForm - (margenIzq * 2), 2),
+            .BackColor = COLOR_LINEA_DIVISORIA,
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        }
         Me.Controls.Add(linea)
 
-        ' --- Tabla (Ocupa todo el resto de la pantalla) ---
-        Dim yTabla As Integer = yFila1 + 90
-        dgvMovimientos.Bounds = New Rectangle(margenIzq, yTabla, Me.ClientSize.Width - (margenIzq * 2), Me.ClientSize.Height - yTabla - 40)
-        dgvMovimientos.Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        ' ============================================================
+        ' 4. GRID DE MOVIMIENTOS (ocupa el resto)
+        ' ============================================================
+        Dim yTabla As Integer = yLinea + 18
+        dgvMovimientos.Bounds = New Rectangle(margenIzq, yTabla, anchoForm - (margenIzq * 2), Me.ClientSize.Height - yTabla - 40)
+        dgvMovimientos.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
+        dgvMovimientos.BackgroundColor = Me.BackColor
+        dgvMovimientos.BorderStyle = BorderStyle.None
         Me.Controls.Add(dgvMovimientos)
     End Sub
 
-    ' Método real para dibujar los filtros (Soluciona el error rojo)
+    ' Método para dibujar etiqueta + control de filtro con estilo moderno
     Private Sub CrearFiltro(textoLabel As String, ctrl As Control, x As Integer, y As Integer, w As Integer)
-        Dim lbl As New Label() With {.Text = textoLabel, .Location = New Point(x, y), .AutoSize = True, .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold), .ForeColor = Color.WhiteSmoke}
+        Dim lbl As New Label() With {
+            .Text = textoLabel,
+            .Location = New Point(x, y),
+            .AutoSize = True,
+            .Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+            .ForeColor = Color.WhiteSmoke,
+            .BackColor = Color.Transparent
+        }
         Me.Controls.Add(lbl)
 
         ctrl.Bounds = New Rectangle(x, y + 23, w, 27)
@@ -75,11 +142,17 @@ Public Class FrmMovimientos
         Me.Controls.Add(ctrl)
     End Sub
 
-    Private Sub ConfigurarBoton(btn As Button, texto As String, x As Integer, y As Integer, colorFondo As Color)
-        btn.Text = texto : btn.Bounds = New Rectangle(x, y, 100, 29)
-        btn.BackColor = colorFondo : btn.ForeColor = Color.White
-        btn.FlatStyle = FlatStyle.Flat : btn.FlatAppearance.BorderSize = 0
-        btn.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold) : btn.Cursor = Cursors.Hand
+    ' Estilo moderno de botón unificado (idéntico al resto de módulos)
+    Private Sub EstilizarBoton(btn As Button, texto As String, x As Integer, y As Integer, bg As Color, fg As Color)
+        btn.Text = texto
+        btn.Location = New Point(x, y)
+        btn.Size = New Size(100, 35)
+        btn.FlatStyle = FlatStyle.Flat
+        btn.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
+        btn.Cursor = Cursors.Hand
+        btn.BackColor = bg
+        btn.ForeColor = fg
+        btn.FlatAppearance.BorderSize = 0
         Me.Controls.Add(btn)
     End Sub
 

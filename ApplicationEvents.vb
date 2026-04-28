@@ -8,22 +8,36 @@ Namespace My
     ' StartupNextInstance: Raised when launching a single-instance application and the application is already active. 
     ' NetworkAvailabilityChanged: Raised when the network connection is connected or disconnected.
 
-    ' **NEW** ApplyApplicationDefaults: Raised when the application queries default values to be set for the application.
-
-    ' Example:
-    ' Private Sub MyApplication_ApplyApplicationDefaults(sender As Object, e As ApplyApplicationDefaultsEventArgs) Handles Me.ApplyApplicationDefaults
-    '
-    '   ' Setting the application-wide default Font:
-    '   e.Font = New Font(FontFamily.GenericSansSerif, 12, FontStyle.Regular)
-    '
-    '   ' Setting the HighDpiMode for the Application:
-    '   e.HighDpiMode = HighDpiMode.PerMonitorV2
-    '
-    '   ' If a splash dialog is used, this sets the minimum display time:
-    '   e.MinimumSplashScreenDisplayTime = 4000
-    ' End Sub
-
     Partial Friend Class MyApplication
+
+        ' Captura de excepciones no manejadas: las registramos en optima_log.txt
+        ' y mostramos un mensaje al usuario en lugar de que la app se cierre sin más.
+        Private Sub MyApplication_UnhandledException(sender As Object, e As UnhandledExceptionEventArgs) Handles Me.UnhandledException
+            Try
+                LogErrores.Registrar("UnhandledException", e.Exception)
+            Catch
+                ' Si el propio log falla, no podemos hacer mucho más.
+            End Try
+
+            Try
+                MessageBox.Show(
+                    "Se ha producido un error inesperado y se ha registrado en el archivo de log." & vbCrLf & vbCrLf &
+                    "Detalle: " & e.Exception.Message,
+                    "Error inesperado",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error)
+            Catch
+            End Try
+
+            ' Indicamos a la aplicación que continúe (no se cierre por este error).
+            e.ExitApplication = False
+        End Sub
+
+        Private Sub MyApplication_Startup(sender As Object, e As StartupEventArgs) Handles Me.Startup
+            Try
+                LogErrores.Info("Application", "Inicio de aplicación OPTIMA")
+            Catch
+            End Try
+        End Sub
 
     End Class
 End Namespace

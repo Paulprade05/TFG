@@ -30,7 +30,7 @@ Public Class FrmArticulos
     Private Sub FrmArticulos_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         Me.Text = "Gestión de Artículos"
         Me.BackColor = Color.FromArgb(70, 75, 80)
-        Me.MinimumSize = New Size(950, 650)
+        Me.MinimumSize = New Size(1000, 720)
 
         ConstruirInterfaz()
         ConfigurarGrid()
@@ -44,17 +44,67 @@ Public Class FrmArticulos
         End If
     End Sub
 
+    ' --- PALETA DE COLORES CENTRALIZADA (idéntica a Presupuestos/Pedidos/Albaranes/Facturas) ---
+    Private Shared ReadOnly COLOR_FONDO As Color = Color.FromArgb(70, 75, 80)
+    Private Shared ReadOnly COLOR_BANDA As Color = Color.FromArgb(40, 50, 70)
+    Private Shared ReadOnly COLOR_PANEL_TOTALES As Color = Color.FromArgb(25, 30, 40)
+    Private Shared ReadOnly COLOR_ACENTO As Color = Color.FromArgb(0, 150, 255)
+    Private Shared ReadOnly COLOR_TEXTO_SECUNDARIO As Color = Color.FromArgb(170, 180, 195)
+    Private Shared ReadOnly COLOR_LINEA_DIVISORIA As Color = Color.FromArgb(120, 130, 140)
+    Private Shared ReadOnly COLOR_SEPARADOR_GRUPO As Color = Color.FromArgb(95, 105, 120)
+
+    ' --- COLORES SEMÁNTICOS DE BOTONES ---
+    Private Shared ReadOnly BTN_AZUL_PRIMARIO As Color = Color.FromArgb(0, 120, 215)
+    Private Shared ReadOnly BTN_ROJO_PELIGRO As Color = Color.FromArgb(209, 52, 56)
+    Private Shared ReadOnly BTN_VERDE_AÑADIR As Color = Color.FromArgb(40, 140, 90)
+    Private Shared ReadOnly BTN_GRIS_NEUTRO As Color = Color.FromArgb(85, 85, 85)
+
     Private Sub ConstruirInterfaz()
         Dim margenIzq As Integer = 30
+        Dim anchoForm As Integer = Me.ClientSize.Width
 
-        Dim yFila1 As Integer = 25
-        Dim yFila2 As Integer = 85
-        Dim yFila3 As Integer = 145
+        ' ============================================================
+        ' 1. BANDA SUPERIOR CON TÍTULO
+        ' ============================================================
+        Dim alturaBanda As Integer = 60
 
+        Dim bandaSuperior As New Panel() With {
+            .Name = "BandaSuperior",
+            .BackColor = COLOR_BANDA,
+            .Bounds = New Rectangle(0, 0, anchoForm, alturaBanda),
+            .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
+        }
+        Me.Controls.Add(bandaSuperior)
+        bandaSuperior.SendToBack()
+
+        Dim lblTitulo As New Label() With {
+            .Name = "LblTituloDoc",
+            .Text = "GESTIÓN DE ARTÍCULOS",
+            .AutoSize = False,
+            .BackColor = COLOR_BANDA,
+            .ForeColor = Color.White,
+            .TextAlign = ContentAlignment.MiddleLeft,
+            .Font = New Font("Segoe UI", 18, FontStyle.Bold),
+            .Bounds = New Rectangle(margenIzq, 0, 600, alturaBanda)
+        }
+        Me.Controls.Add(lblTitulo)
+        lblTitulo.BringToFront()
+
+        ' ============================================================
+        ' 2. ZONA DE FORMULARIO (3 filas como antes, recolocadas debajo de la banda)
+        ' ============================================================
+        Dim yInicio As Integer = alturaBanda + 20
+
+        Dim yFila1 As Integer = yInicio
+        Dim yFila2 As Integer = yInicio + 60
+        Dim yFila3 As Integer = yInicio + 120
+
+        ' --- Fila 1: identificación del artículo ---
         CrearCampo("Cód. Referencia", txtCodigo, margenIzq, yFila1, 130)
         CrearCampo("Cód. Barras", txtCodigoBarras, 180, yFila1, 150)
         CrearCampo("Descripción del Artículo", txtDescripcion, 350, yFila1, 460)
 
+        ' --- Fila 2: clasificación y precios ---
         CrearCampo("Familia", cboFamilia, margenIzq, yFila2, 180)
         cboFamilia.DropDownStyle = ComboBoxStyle.DropDownList
 
@@ -68,47 +118,58 @@ Public Class FrmArticulos
         cboIVA.Items.AddRange({"21", "10", "4", "0"})
         cboIVA.DropDownStyle = ComboBoxStyle.DropDownList
 
+        ' --- Fila 3: stock y observaciones ---
         CrearCampo("Stock Actual", txtStockActual, margenIzq, yFila3, 100)
         CrearCampo("Stock Mín.", txtStockMinimo, 150, yFila3, 100)
 
         CrearCampo("Observaciones / Detalles Técnicos", txtObservaciones, 270, yFila3, 540)
         txtObservaciones.Height = 45 : txtObservaciones.Multiline = True
 
-        ' Línea Divisoria 
-        Dim yLinea As Integer = 215
+        ' ============================================================
+        ' 3. LÍNEA DIVISORIA ENTRE CABECERA Y GRID
+        ' ============================================================
+        Dim yLinea As Integer = yFila3 + 80
         Dim linea As New Label() With {
-            .Bounds = New Rectangle(margenIzq, yLinea, Me.ClientSize.Width - (margenIzq * 2), 2),
-            .BackColor = Color.FromArgb(100, 110, 120),
+            .Name = "LineaDivisoria",
+            .Bounds = New Rectangle(margenIzq, yLinea, anchoForm - (margenIzq * 2), 2),
+            .BackColor = COLOR_LINEA_DIVISORIA,
             .Anchor = AnchorStyles.Top Or AnchorStyles.Left Or AnchorStyles.Right
         }
         Me.Controls.Add(linea)
 
-        ' Tabla 
-        Dim yTabla As Integer = 235
+        ' ============================================================
+        ' 4. GRID DE ARTÍCULOS
+        ' ============================================================
+        Dim yTabla As Integer = yLinea + 18
         Dim altoTabla As Integer = Me.ClientSize.Height - yTabla - 80
-        dgvArticulos.Bounds = New Rectangle(margenIzq, yTabla, Me.ClientSize.Width - (margenIzq * 2), altoTabla)
+        dgvArticulos.Bounds = New Rectangle(margenIzq, yTabla, anchoForm - (margenIzq * 2), altoTabla)
         dgvArticulos.Anchor = AnchorStyles.Top Or AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
+        dgvArticulos.BackgroundColor = Me.BackColor
+        dgvArticulos.BorderStyle = BorderStyle.None
         Me.Controls.Add(dgvArticulos)
 
-        ' Botones 
+        ' ============================================================
+        ' 5. BARRA INFERIOR DE BOTONES (Guardar / Borrar / Nuevo)
+        ' ============================================================
         Dim yBotones As Integer = dgvArticulos.Bottom + 20
-        ConfigurarBoton(btnGuardar, "Guardar", margenIzq, yBotones, Color.FromArgb(0, 120, 215))
-        ConfigurarBoton(btnBorrar, "Borrar", margenIzq + 115, yBotones, Color.FromArgb(209, 52, 56))
-        ConfigurarBoton(btnNuevo, "Nuevo", margenIzq + 230, yBotones, Color.FromArgb(0, 120, 215))
 
-        btnGuardar.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
-        btnBorrar.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
-        btnNuevo.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        EstilizarBoton(btnGuardar, "Guardar", margenIzq, yBotones, BTN_AZUL_PRIMARIO, Color.White)
+        EstilizarBoton(btnBorrar, "Borrar", margenIzq + 110, yBotones, BTN_ROJO_PELIGRO, Color.White)
+        EstilizarBoton(btnNuevo, "Nuevo", margenIzq + 220, yBotones, BTN_AZUL_PRIMARIO, Color.White)
+
+        Dim botonesAbajo As Control() = {btnGuardar, btnBorrar, btnNuevo}
+        For Each b In botonesAbajo : b.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left : Next
     End Sub
 
-    ' Metodo de creacion de campos 
+    ' Método de creación de campos (etiqueta + control) con estilo moderno
     Private Sub CrearCampo(textoLabel As String, ctrl As Control, x As Integer, y As Integer, w As Integer)
         Dim lbl As New Label() With {
             .Text = textoLabel,
             .Location = New Point(x, y),
             .AutoSize = True,
-            .Font = New Font("Segoe UI", 9.5F, FontStyle.Bold),
-            .ForeColor = Color.WhiteSmoke
+            .Font = New Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+            .ForeColor = Color.WhiteSmoke,
+            .BackColor = Color.Transparent
         }
         Me.Controls.Add(lbl)
 
@@ -123,6 +184,20 @@ Public Class FrmArticulos
         ctrl.Anchor = AnchorStyles.Top Or AnchorStyles.Left
 
         Me.Controls.Add(ctrl)
+    End Sub
+
+    ' Estilo moderno de botón unificado (idéntico al de Presupuestos/Pedidos)
+    Private Sub EstilizarBoton(btn As Button, texto As String, x As Integer, y As Integer, bg As Color, fg As Color)
+        btn.Text = texto
+        btn.Location = New Point(x, y)
+        btn.Size = New Size(100, 35)
+        btn.FlatStyle = FlatStyle.Flat
+        btn.Font = New Font("Segoe UI", 9.5F, FontStyle.Bold)
+        btn.Cursor = Cursors.Hand
+        btn.BackColor = bg
+        btn.ForeColor = fg
+        btn.FlatAppearance.BorderSize = 0
+        Me.Controls.Add(btn)
     End Sub
 
     Private Sub ConfigurarGrid()
@@ -154,13 +229,6 @@ Public Class FrmArticulos
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "TipoIVA", .DataPropertyName = "TipoIVA", .Visible = False})
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "StockMinimo", .DataPropertyName = "StockMinimo", .Visible = False})
         dgvArticulos.Columns.Add(New DataGridViewTextBoxColumn() With {.Name = "Observaciones", .DataPropertyName = "Observaciones", .Visible = False})
-    End Sub
-    Private Sub ConfigurarBoton(btn As Button, texto As String, x As Integer, y As Integer, colorFondo As Color)
-        btn.Text = texto : btn.Bounds = New Rectangle(x, y, 100, 32)
-        btn.BackColor = colorFondo : btn.ForeColor = Color.White
-        btn.FlatStyle = FlatStyle.Flat : btn.FlatAppearance.BorderSize = 0
-        btn.Font = New Font("Segoe UI", 10, FontStyle.Bold) : btn.Cursor = Cursors.Hand
-        Me.Controls.Add(btn)
     End Sub
     Private Sub AjustarAltoTabla()
         If dgvArticulos Is Nothing Then Return
@@ -299,33 +367,50 @@ Public Class FrmArticulos
             Return
         End If
 
+        Dim c = ConexionBD.GetConnection()
+        Dim trans As SQLiteTransaction = Nothing
         Try
-            Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
+            trans = c.BeginTransaction()
 
-            Using cmdFK As New SQLiteCommand("PRAGMA foreign_keys = OFF;", c)
-                cmdFK.ExecuteNonQuery()
-            End Using
+            ' NOTA: se ha eliminado el "PRAGMA foreign_keys = OFF" que había aquí. La conexión es un
+            ' singleton compartido por toda la app, así que desactivar las FK aquí dejaba todo el sistema
+            ' sin integridad referencial el resto de la sesión. Si en algún UPDATE concreto la FK molesta,
+            ' es señal de un dato inconsistente que conviene corregir, no enmascarar.
 
             Dim pCoste As Decimal = 0 : Decimal.TryParse(txtPrecioCompra.Text, pCoste)
             Dim pVenta As Decimal = 0 : Decimal.TryParse(txtPrecioVenta.Text, pVenta)
-            Dim stock As Decimal = 0 : Decimal.TryParse(txtStockActual.Text, stock)
+            Dim stockNuevo As Decimal = 0 : Decimal.TryParse(txtStockActual.Text, stockNuevo)
             Dim sMinimo As Decimal = 0 : Decimal.TryParse(txtStockMinimo.Text, sMinimo)
             Dim iva As Integer = 21 : Integer.TryParse(cboIVA.Text, iva)
 
             Dim idFamilia As Object = If(cboFamilia.SelectedValue IsNot Nothing, cboFamilia.SelectedValue, DBNull.Value)
             Dim idProveedor As Object = If(cboProveedor.SelectedValue IsNot Nothing, cboProveedor.SelectedValue, DBNull.Value)
 
+            ' --- Si es edición, leemos el stock anterior para registrar el ajuste como movimiento ---
+            Dim stockAnterior As Decimal = 0
+            Dim esEdicion As Boolean = (_idArticuloActual > 0)
+            If esEdicion Then
+                Using cmdAnt As New SQLiteCommand("SELECT StockActual FROM Articulos WHERE ID_Articulo = @id", c, trans)
+                    cmdAnt.Parameters.AddWithValue("@id", _idArticuloActual)
+                    Dim res = cmdAnt.ExecuteScalar()
+                    If res IsNot Nothing AndAlso Not IsDBNull(res) Then stockAnterior = Convert.ToDecimal(res)
+                End Using
+            End If
+
             Dim sql As String
-            If _idArticuloActual = 0 Then
+            If Not esEdicion Then
                 sql = "INSERT INTO Articulos (CodigoReferencia, CodigoBarras, Descripcion, ID_Familia, ID_ProveedorHabitual, PrecioCoste, PrecioVenta, TipoIVA, StockActual, StockMinimo, Observaciones) " &
-                      "VALUES (@cod, @barras, @desc, @fam, @prov, @pcoste, @pventa, @iva, @stock, @smin, @obs)"
+                      "VALUES (@cod, @barras, @desc, @fam, @prov, @pcoste, @pventa, @iva, @stock, @smin, @obs); SELECT last_insert_rowid();"
             Else
                 sql = "UPDATE Articulos SET CodigoReferencia=@cod, CodigoBarras=@barras, Descripcion=@desc, ID_Familia=@fam, ID_ProveedorHabitual=@prov, PrecioCoste=@pcoste, PrecioVenta=@pventa, TipoIVA=@iva, StockActual=@stock, StockMinimo=@smin, Observaciones=@obs " &
                       "WHERE ID_Articulo=@id"
             End If
 
+            Dim idArticuloFinal As Integer = _idArticuloActual
+
             Using cmd As New SQLiteCommand(sql, c)
+                cmd.Transaction = trans
                 cmd.Parameters.AddWithValue("@cod", txtCodigo.Text.Trim())
                 cmd.Parameters.AddWithValue("@barras", txtCodigoBarras.Text.Trim())
                 cmd.Parameters.AddWithValue("@desc", txtDescripcion.Text.Trim())
@@ -334,19 +419,50 @@ Public Class FrmArticulos
                 cmd.Parameters.AddWithValue("@pcoste", pCoste)
                 cmd.Parameters.AddWithValue("@pventa", pVenta)
                 cmd.Parameters.AddWithValue("@iva", iva)
-                cmd.Parameters.AddWithValue("@stock", stock)
+                cmd.Parameters.AddWithValue("@stock", stockNuevo)
                 cmd.Parameters.AddWithValue("@smin", sMinimo)
                 cmd.Parameters.AddWithValue("@obs", txtObservaciones.Text)
 
-                If _idArticuloActual > 0 Then cmd.Parameters.AddWithValue("@id", _idArticuloActual)
-                cmd.ExecuteNonQuery()
+                If esEdicion Then
+                    cmd.Parameters.AddWithValue("@id", _idArticuloActual)
+                    cmd.ExecuteNonQuery()
+                Else
+                    idArticuloFinal = Convert.ToInt32(cmd.ExecuteScalar())
+                End If
             End Using
 
+            ' === REGISTRAR MOVIMIENTO DE AJUSTE SI EL STOCK CAMBIA ===
+            ' Solo registramos cuando es edición y hay diferencia. Para artículos NUEVOS no registramos
+            ' movimiento porque el stock inicial no es ni una entrada ni una salida (es un dato de alta).
+            If esEdicion AndAlso stockNuevo <> stockAnterior Then
+                Dim variacion As Decimal = stockNuevo - stockAnterior
+                Dim tipoMov As String = If(variacion > 0, EstadosDocumento.MOV_AJUSTE_MAS, EstadosDocumento.MOV_AJUSTE_MENOS)
+                Dim cantidad As Decimal = Math.Abs(variacion)
+
+                Dim idUsr As Object = If(ComunSesionActual.IdUsuario > 0, CType(ComunSesionActual.IdUsuario, Object), DBNull.Value)
+
+                Dim sqlMov As String = "INSERT INTO MovimientosAlmacen (Fecha, ID_Articulo, TipoMovimiento, Cantidad, StockResultante, DocumentoReferencia, ID_Usuario) " &
+                                       "VALUES (@fecha, @idArt, @tipo, @cant, @stockRes, @doc, @usr)"
+                Using cmdMov As New SQLiteCommand(sqlMov, c, trans)
+                    cmdMov.Parameters.AddWithValue("@fecha", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"))
+                    cmdMov.Parameters.AddWithValue("@idArt", idArticuloFinal)
+                    cmdMov.Parameters.AddWithValue("@tipo", tipoMov)
+                    cmdMov.Parameters.AddWithValue("@cant", cantidad)
+                    cmdMov.Parameters.AddWithValue("@stockRes", stockNuevo)
+                    cmdMov.Parameters.AddWithValue("@doc", "Ajuste manual desde ficha de artículo")
+                    cmdMov.Parameters.AddWithValue("@usr", idUsr)
+                    cmdMov.ExecuteNonQuery()
+                End Using
+            End If
+
+            trans.Commit()
             MessageBox.Show("Artículo guardado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
             btnNuevo.PerformClick()
             CargarArticulos()
 
         Catch ex As Exception
+            If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("frmArticulos.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message, "Error BD", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub

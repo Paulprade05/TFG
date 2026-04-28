@@ -230,6 +230,18 @@ Public Class FrmClienteDetalle
             MessageBox.Show("El Nombre Fiscal es obligatorio.") : Return
         End If
 
+        ' === VALIDACIONES DE ENTRADA (NO BLOQUEANTES) ===
+        ' El cliente puede ser empresa (CIF), particular (NIF) o extranjero (NIE).
+        ' Si algo no cuadra avisamos al usuario, pero le dejamos guardar igualmente
+        ' (porque puede haber datos importados con CIFs no válidos según AEAT).
+        If Not Validador.ConfirmarSiHayProblemas(
+            ("CIF/NIF/NIE del cliente", Validador.ValidarDocumentoIdentidad(TextBoxCIF.Text)),
+            ("Email", Validador.ValidarEmail(TextBoxEmail.Text)),
+            ("Teléfono", Validador.ValidarTelefono(TextBoxTelefono.Text))
+        ) Then
+            Return
+        End If
+
         Try
             Dim conexion = ConexionBD.GetConnection()
             If conexion.State <> ConnectionState.Open Then conexion.Open()
@@ -246,7 +258,7 @@ Public Class FrmClienteDetalle
                 cmd.Parameters.AddWithValue("@cod", TextBoxCodigo.Text)
                 cmd.Parameters.AddWithValue("@nomF", TextBoxNombreFiscal.Text)
                 cmd.Parameters.AddWithValue("@nomC", TextBoxNombreComercial.Text)
-                cmd.Parameters.AddWithValue("@cif", TextBoxCIF.Text)
+                cmd.Parameters.AddWithValue("@cif", TextBoxCIF.Text.Trim().ToUpperInvariant())
                 cmd.Parameters.AddWithValue("@dir", TextBoxDireccion.Text)
                 cmd.Parameters.AddWithValue("@pob", TextBoxPoblacion.Text)
                 cmd.Parameters.AddWithValue("@prov", TextBoxProvincia.Text)
@@ -261,6 +273,7 @@ Public Class FrmClienteDetalle
             MessageBox.Show("Cliente guardado.")
             Me.Close() ' Cierra la ventana emergente y vuelve a la lista
         Catch ex As Exception
+            LogErrores.Registrar("FrmClienteDetalle.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub

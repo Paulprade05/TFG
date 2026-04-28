@@ -224,6 +224,17 @@ Public Class FrmVendedores
             Return
         End If
 
+        ' === VALIDACIONES DE ENTRADA (NO BLOQUEANTES) ===
+        ' El "DNI" del vendedor puede ser NIF o NIE (es siempre persona física).
+        If Not Validador.ConfirmarSiHayProblemas(
+            ("DNI/NIE del vendedor", Validador.ValidarDocumentoIdentidad(txtDNI.Text)),
+            ("Email", Validador.ValidarEmail(txtEmail.Text)),
+            ("Teléfono", Validador.ValidarTelefono(txtTelefono.Text)),
+            ("Código postal", Validador.ValidarCodigoPostal(txtCP.Text))
+        ) Then
+            Return
+        End If
+
         Try
             Dim c = ConexionBD.GetConnection()
             If c.State <> ConnectionState.Open Then c.Open()
@@ -240,7 +251,7 @@ Public Class FrmVendedores
             Using cmd As New SQLiteCommand(sql, c)
                 cmd.Parameters.AddWithValue("@cod", txtCodigo.Text.Trim())
                 cmd.Parameters.AddWithValue("@nom", txtNombre.Text.Trim())
-                cmd.Parameters.AddWithValue("@dni", txtDNI.Text.Trim())
+                cmd.Parameters.AddWithValue("@dni", txtDNI.Text.Trim().ToUpperInvariant())
                 cmd.Parameters.AddWithValue("@tel", txtTelefono.Text.Trim())
                 cmd.Parameters.AddWithValue("@email", txtEmail.Text.Trim())
                 cmd.Parameters.AddWithValue("@dir", txtDireccion.Text.Trim())
@@ -265,6 +276,7 @@ Public Class FrmVendedores
             btnNuevo.PerformClick()
             CargarVendedores()
         Catch ex As Exception
+            LogErrores.Registrar("FrmVendedores.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message, "Error BD", MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub

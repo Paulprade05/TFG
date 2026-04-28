@@ -175,28 +175,8 @@ Public Class FrmAlbaranesCompra
     End Sub
 
     Private Function GenerarProximoNumeroAlbaran() As String
-        Dim prefijo As String = "ALC-"
-        Dim nuevoNumero As String = $"{prefijo}001"
-        Try
-            Dim sql As String = "SELECT NumeroAlbaranCompra FROM AlbaranesCompra WHERE NumeroAlbaranCompra LIKE @patron ORDER BY NumeroAlbaranCompra DESC LIMIT 1"
-
-            Dim c = ConexionBD.GetConnection()
-            If c.State <> ConnectionState.Open Then c.Open()
-
-            Using cmd As New SQLiteCommand(sql, c)
-                cmd.Parameters.AddWithValue("@patron", prefijo & "%")
-                Dim resultado = cmd.ExecuteScalar()
-                If resultado IsNot Nothing AndAlso Not IsDBNull(resultado) Then
-                    Dim partes As String() = resultado.ToString().Split("-"c)
-                    If partes.Length >= 2 AndAlso IsNumeric(partes(1)) Then
-                        nuevoNumero = $"{prefijo}{(CInt(partes(1)) + 1).ToString("D3")}"
-                    End If
-                End If
-            End Using
-        Catch
-            nuevoNumero = $"ALC-{DateTime.Now:HHmmss}"
-        End Try
-        Return nuevoNumero
+        ' Delegamos en NumeradorDocumentos para tener orden numérico (no lexicográfico).
+        Return NumeradorDocumentos.SiguienteNumero("ALC-", "AlbaranesCompra", "NumeroAlbaranCompra")
     End Function
 #End Region
 
@@ -371,24 +351,44 @@ Public Class FrmAlbaranesCompra
                 End Using
             End If
 
-            ' 2. Borrar líneas eliminadas
+            ' Fecha del albarán para los movimientos
+            Dim fechaAlb As DateTime
+            If Not DateTime.TryParse(TextBoxFecha.Text, fechaAlb) Then fechaAlb = DateTime.Now
+
+            ' 2. Borrar líneas eliminadas (Y RESTITUIR EL STOCK: una línea borrada deshace la entrada)
             For Each idDel In _idsParaBorrar
+                Dim idArtDel As Integer = 0
+                Dim cantDel As Decimal = 0
+                Using cmdInfo As New SQLiteCommand("SELECT ID_Articulo, CantidadRecibida FROM LineasAlbaranCompra WHERE ID_Linea = @id", c, trans)
+                    cmdInfo.Parameters.AddWithValue("@id", idDel)
+                    Using reader = cmdInfo.ExecuteReader()
+                        If reader.Read() Then
+                            If Not IsDBNull(reader("ID_Articulo")) Then idArtDel = Convert.ToInt32(reader("ID_Articulo"))
+                            cantDel = Convert.ToDecimal(reader("CantidadRecibida"))
+                        End If
+                    End Using
+                End Using
+
                 Using cmdDel As New SQLiteCommand("DELETE FROM LineasAlbaranCompra WHERE ID_Linea = @id", c)
                     cmdDel.Transaction = trans : cmdDel.Parameters.AddWithValue("@id", idDel) : cmdDel.ExecuteNonQuery()
                 End Using
+                ' Variación negativa: deshacemos la entrada que se hizo originalmente
+                If idArtDel > 0 Then ActualizarStockYMovimiento(c, trans, _numeroAlbaranActual, idArtDel, -cantDel, fechaAlb)
             Next
             _idsParaBorrar.Clear()
 
-            ' 3. Guardar Líneas
+            ' 3. Guardar Líneas (Y MOVER STOCK)
             Dim orden As Integer = 1
             For Each row As DataRow In _dtLineas.Rows
                 If row.RowState = DataRowState.Deleted Then Continue For
 
                 Dim idLin = row("ID_Linea")
                 Dim idArt As Object = If(IsNumeric(row("ID_Articulo")) AndAlso Val(row("ID_Articulo")) > 0, Convert.ToInt32(row("ID_Articulo")), DBNull.Value)
+                Dim cant As Decimal = 0 : Decimal.TryParse(row("CantidadRecibida").ToString(), cant)
                 Dim sqlLine As String = ""
+                Dim esLineaNueva As Boolean = (IsDBNull(idLin) OrElse Not IsNumeric(idLin) OrElse Val(idLin) = 0)
 
-                If IsDBNull(idLin) OrElse Not IsNumeric(idLin) OrElse Val(idLin) = 0 Then
+                If esLineaNueva Then
                     sqlLine = "INSERT INTO LineasAlbaranCompra (ID_AlbaranCompra, NumeroOrden, ID_Articulo, Descripcion, CantidadRecibida, PrecioUnitario, Descuento, PorcentajeIVA, Total) " &
                               "VALUES (@idAlb, @ord, @art, @desc, @cant, @prec, @dcto, @iva, @tot)"
                 Else
@@ -409,8 +409,41 @@ Public Class FrmAlbaranesCompra
                     If sqlLine.Contains("WHERE") Then cmdL.Parameters.AddWithValue("@id", idLin)
                     cmdL.ExecuteNonQuery()
                 End Using
+
+                ' === MOVIMIENTO DE STOCK (ENTRADA) ===
+                If Not IsDBNull(idArt) Then
+                    Dim idArtInt As Integer = Convert.ToInt32(idArt)
+                    If esLineaNueva Then
+                        ' Línea nueva: entrada completa (variación POSITIVA = entrada)
+                        ActualizarStockYMovimiento(c, trans, _numeroAlbaranActual, idArtInt, cant, fechaAlb)
+                    ElseIf row.RowState = DataRowState.Modified Then
+                        ' Línea modificada: solo movemos la diferencia
+                        Dim cantAnterior As Decimal = 0
+                        If row.HasVersion(DataRowVersion.Original) AndAlso Not IsDBNull(row("CantidadRecibida", DataRowVersion.Original)) Then
+                            Decimal.TryParse(row("CantidadRecibida", DataRowVersion.Original).ToString(), cantAnterior)
+                        End If
+                        Dim variacion = cant - cantAnterior
+                        If variacion <> 0 Then
+                            ActualizarStockYMovimiento(c, trans, _numeroAlbaranActual, idArtInt, variacion, fechaAlb)
+                        End If
+                    End If
+                End If
                 orden += 1
             Next
+
+            ' =========================================================
+            ' MAGIA DE ESTADOS (COMPRAS): Marcar PedidoCompra como Recibido
+            ' Si el albarán está vinculado a un pedido de compra origen, lo marcamos
+            ' automáticamente como "Recibido".
+            ' =========================================================
+            If Not IsDBNull(idPedOrigen) AndAlso idPedOrigen IsNot Nothing Then
+                Using cmdEst As New SQLiteCommand("UPDATE PedidosCompra SET Estado = @estado WHERE ID_PedidoCompra = @idPed", c)
+                    cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@estado", EstadosDocumento.PEDIDO_COMPRA_RECIBIDO)
+                    cmdEst.Parameters.AddWithValue("@idPed", idPedOrigen)
+                    cmdEst.ExecuteNonQuery()
+                End Using
+            End If
 
             trans.Commit()
             MessageBox.Show("Guardado correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information)
@@ -418,6 +451,7 @@ Public Class FrmAlbaranesCompra
 
         Catch ex As Exception
             If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("FrmAlbaranesCompra.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub
@@ -556,27 +590,52 @@ Public Class FrmAlbaranesCompra
     Private Sub ButtonBorrar_Click(sender As Object, e As EventArgs) Handles ButtonBorrar.Click
         If String.IsNullOrEmpty(_numeroAlbaranActual) Then Return
         If MessageBox.Show("¿Seguro que deseas eliminar este albarán de compra?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) = DialogResult.Yes Then
+            Dim c = ConexionBD.GetConnection()
+            Dim trans As SQLiteTransaction = Nothing
             Try
-                Dim c = ConexionBD.GetConnection()
                 If c.State <> ConnectionState.Open Then c.Open()
+                trans = c.BeginTransaction()
 
                 ' Obtenemos el id interno
                 Dim idInterno As Integer = 0
-                Using cmdId As New SQLiteCommand("SELECT ID_AlbaranCompra FROM AlbaranesCompra WHERE NumeroAlbaranCompra=@num", c)
+                Using cmdId As New SQLiteCommand("SELECT ID_AlbaranCompra FROM AlbaranesCompra WHERE NumeroAlbaranCompra=@num", c, trans)
                     cmdId.Parameters.AddWithValue("@num", _numeroAlbaranActual)
                     Dim rid = cmdId.ExecuteScalar()
                     If rid IsNot Nothing AndAlso Not IsDBNull(rid) Then idInterno = Convert.ToInt32(rid)
                 End Using
 
                 If idInterno > 0 Then
+                    ' === RESTITUIR STOCK: cada línea representa una entrada que hay que deshacer ===
+                    Dim lineas As New List(Of Tuple(Of Integer, Decimal))
+                    Using cmdRec As New SQLiteCommand("SELECT ID_Articulo, CantidadRecibida FROM LineasAlbaranCompra WHERE ID_AlbaranCompra=@id", c, trans)
+                        cmdRec.Parameters.AddWithValue("@id", idInterno)
+                        Using reader = cmdRec.ExecuteReader()
+                            While reader.Read()
+                                If Not IsDBNull(reader("ID_Articulo")) Then
+                                    lineas.Add(New Tuple(Of Integer, Decimal)(Convert.ToInt32(reader("ID_Articulo")), Convert.ToDecimal(reader("CantidadRecibida"))))
+                                End If
+                            End While
+                        End Using
+                    End Using
+
+                    For Each l In lineas
+                        ' Variación negativa para deshacer la entrada
+                        ActualizarStockYMovimiento(c, trans, _numeroAlbaranActual & " (Borrado)", l.Item1, -l.Item2, DateTime.Now)
+                    Next
+
                     Using cmd As New SQLiteCommand("DELETE FROM LineasAlbaranCompra WHERE ID_AlbaranCompra=@id; DELETE FROM AlbaranesCompra WHERE ID_AlbaranCompra=@id;", c)
+                        cmd.Transaction = trans
                         cmd.Parameters.AddWithValue("@id", idInterno)
                         cmd.ExecuteNonQuery()
                     End Using
                 End If
+                trans.Commit()
+                MessageBox.Show("Albarán de compra eliminado. Stock restaurado.", "Eliminado", MessageBoxButtons.OK, MessageBoxIcon.Information)
                 LimpiarFormulario()
             Catch ex As Exception
-                MessageBox.Show(ex.Message)
+                If trans IsNot Nothing Then trans.Rollback()
+                LogErrores.Registrar("FrmAlbaranesCompra.Borrar", ex)
+                MessageBox.Show("Error al borrar: " & ex.Message)
             End Try
         End If
     End Sub
@@ -1436,5 +1495,49 @@ Public Class FrmAlbaranesCompra
 
             e.HasMorePages = False
         End If
+    End Sub
+
+    ' =========================================================================
+    ' MOTOR DE STOCK PARA COMPRAS
+    ' Igual que en ventas, pero con SIGNO INVERTIDO:
+    '   variacionEntrada > 0 -> ENTRADA (suma stock)
+    '   variacionEntrada < 0 -> SALIDA  (resta stock, p.ej. al borrar línea/albarán)
+    ' =========================================================================
+    Private Sub ActualizarStockYMovimiento(c As SQLiteConnection, trans As SQLiteTransaction, albaran As String, idArticulo As Integer, variacionEntrada As Decimal, fecha As DateTime)
+        If variacionEntrada = 0 Then Return
+
+        Dim stockActual As Decimal = 0
+        Using cmdStock As New SQLiteCommand("SELECT StockActual FROM Articulos WHERE ID_Articulo = @id", c, trans)
+            cmdStock.Parameters.AddWithValue("@id", idArticulo)
+            Dim res = cmdStock.ExecuteScalar()
+            If res IsNot Nothing AndAlso Not IsDBNull(res) Then stockActual = Convert.ToDecimal(res)
+        End Using
+
+        Dim nuevoStock As Decimal = stockActual + variacionEntrada
+
+        Using cmdUpd As New SQLiteCommand("UPDATE Articulos SET StockActual = @nuevo WHERE ID_Articulo = @id", c, trans)
+            cmdUpd.Parameters.AddWithValue("@nuevo", nuevoStock)
+            cmdUpd.Parameters.AddWithValue("@id", idArticulo)
+            cmdUpd.ExecuteNonQuery()
+        End Using
+
+        Dim tipoMov As String = If(variacionEntrada > 0, EstadosDocumento.MOV_ENTRADA, EstadosDocumento.MOV_SALIDA)
+        Dim cantidadMov As Decimal = Math.Abs(variacionEntrada)
+
+        ' ID de usuario real desde la sesión (si no hay, NULL)
+        Dim idUsr As Object = If(ComunSesionActual.IdUsuario > 0, CType(ComunSesionActual.IdUsuario, Object), DBNull.Value)
+
+        Dim sqlMov As String = "INSERT INTO MovimientosAlmacen (Fecha, ID_Articulo, TipoMovimiento, Cantidad, StockResultante, DocumentoReferencia, ID_Usuario) " &
+                               "VALUES (@fecha, @idArt, @tipo, @cant, @stockRes, @doc, @usr)"
+        Using cmdMov As New SQLiteCommand(sqlMov, c, trans)
+            cmdMov.Parameters.AddWithValue("@fecha", fecha.ToString("yyyy-MM-dd HH:mm:ss"))
+            cmdMov.Parameters.AddWithValue("@idArt", idArticulo)
+            cmdMov.Parameters.AddWithValue("@tipo", tipoMov)
+            cmdMov.Parameters.AddWithValue("@cant", cantidadMov)
+            cmdMov.Parameters.AddWithValue("@stockRes", nuevoStock)
+            cmdMov.Parameters.AddWithValue("@doc", albaran)
+            cmdMov.Parameters.AddWithValue("@usr", idUsr)
+            cmdMov.ExecuteNonQuery()
+        End Using
     End Sub
 End Class

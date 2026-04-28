@@ -167,7 +167,10 @@ Public Class FrmAlbaranes
                         LimpiarFormulario()
 
                         ' Guardamos el número de pedido origen (para cambiarle el estado al guardar)
+                        ' IMPORTANTE: hay que asignar tanto .Text (para mostrarlo) como .Tag (para que
+                        ' el guardado lo lea — el código de btnGuardar_Click usa .Tag, no .Text).
                         TextBoxPedidoOrigen.Text = numeroPedido
+                        TextBoxPedidoOrigen.Tag = numeroPedido
 
                         TextBoxIdCliente.Text = r("CodigoCliente").ToString()
                         TextBoxCliente.Text = r("NombreFiscal").ToString()
@@ -501,9 +504,10 @@ Public Class FrmAlbaranes
             ' MAGIA DE ESTADOS: Marcar Pedido como Servido
             ' =========================================================
             If TextBoxPedidoOrigen.Tag IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(TextBoxPedidoOrigen.Tag.ToString()) Then
-                Dim sqlEstado As String = "UPDATE Pedidos SET Estado = 'Servido' WHERE NumeroPedido = @idPed"
+                Dim sqlEstado As String = "UPDATE Pedidos SET Estado = @estado WHERE NumeroPedido = @idPed"
                 Using cmdEst As New SQLiteCommand(sqlEstado, c)
                     cmdEst.Transaction = trans
+                    cmdEst.Parameters.AddWithValue("@estado", EstadosDocumento.PEDIDO_SERVIDO)
                     cmdEst.Parameters.AddWithValue("@idPed", TextBoxPedidoOrigen.Tag.ToString())
                     cmdEst.ExecuteNonQuery()
                 End Using
@@ -514,6 +518,7 @@ Public Class FrmAlbaranes
 
         Catch ex As Exception
             If trans IsNot Nothing Then trans.Rollback()
+            LogErrores.Registrar("FrmAlbaranes.Guardar", ex)
             MessageBox.Show("Error al guardar: " & ex.Message)
         End Try
     End Sub
@@ -585,7 +590,12 @@ Public Class FrmAlbaranes
                             cboAgencias.SelectedIndex = -1
                         End If
 
-                        If Not IsDBNull(reader("NumeroPedido")) Then TextBoxPedidoOrigen.Text = reader("NumeroPedido").ToString()
+                        ' Cuando reabrimos un albarán ya guardado, restablecemos también el .Tag para
+                        ' que un guardado posterior pueda actualizar el estado del pedido si hace falta.
+                        If Not IsDBNull(reader("NumeroPedido")) Then
+                            TextBoxPedidoOrigen.Text = reader("NumeroPedido").ToString()
+                            TextBoxPedidoOrigen.Tag = reader("NumeroPedido").ToString()
+                        End If
                         If Not IsDBNull(reader("FechaEntrega")) Then DateTimePickerFecha.Value = Convert.ToDateTime(reader("FechaEntrega"))
 
                         TextBoxBultos.Text = reader("NumeroBultos")
@@ -668,24 +678,8 @@ Public Class FrmAlbaranes
     End Sub
 
     Private Function GenerarProximoNumeroAlbaran() As String
-        Dim prefijo As String = "ALB-"
-        Dim nuevo As String = "ALB-001"
-        Try
-            Dim c = ConexionBD.GetConnection()
-            If c.State <> ConnectionState.Open Then c.Open()
-            Dim cmd As New SQLiteCommand("SELECT NumeroAlbaran FROM Albaranes WHERE NumeroAlbaran LIKE @pat ORDER BY NumeroAlbaran DESC LIMIT 1", c)
-            cmd.Parameters.AddWithValue("@pat", prefijo & "%")
-            Dim res = cmd.ExecuteScalar()
-            If res IsNot Nothing AndAlso Not IsDBNull(res) Then
-                Dim parts = res.ToString().Split("-"c)
-                If parts.Length >= 2 Then
-                    nuevo = prefijo & (Convert.ToInt32(parts(parts.Length - 1)) + 1).ToString("D3")
-                End If
-            End If
-        Catch
-            nuevo = "ALB-" & DateTime.Now.Ticks.ToString().Substring(12)
-        End Try
-        Return nuevo
+        ' Delegamos en NumeradorDocumentos para tener orden numérico (no lexicográfico).
+        Return NumeradorDocumentos.SiguienteNumero("ALB-", "Albaranes", "NumeroAlbaran")
     End Function
 
     Private Function ObtenerUltimoNumeroAlbaran() As String
@@ -1533,11 +1527,15 @@ Public Class FrmAlbaranes
             cmdUpd.ExecuteNonQuery()
         End Using
 
-        Dim tipoMov As String = If(variacionSalida > 0, "SALIDA", "ENTRADA")
+        Dim tipoMov As String = If(variacionSalida > 0, EstadosDocumento.MOV_SALIDA, EstadosDocumento.MOV_ENTRADA)
         Dim cantidadMov As Decimal = Math.Abs(variacionSalida)
 
+        ' ID de usuario real desde la sesión (si no hay sesión válida, se guarda NULL).
+        ' Antes estaba hardcodeado a 1, lo que destrozaba la auditoría.
+        Dim idUsr As Object = If(ComunSesionActual.IdUsuario > 0, CType(ComunSesionActual.IdUsuario, Object), DBNull.Value)
+
         Dim sqlMov As String = "INSERT INTO MovimientosAlmacen (Fecha, ID_Articulo, TipoMovimiento, Cantidad, StockResultante, DocumentoReferencia, ID_Usuario) " &
-                               "VALUES (@fecha, @idArt, @tipo, @cant, @stockRes, @doc, 1)"
+                               "VALUES (@fecha, @idArt, @tipo, @cant, @stockRes, @doc, @usr)"
         Using cmdMov As New SQLiteCommand(sqlMov, c, trans)
             cmdMov.Parameters.AddWithValue("@fecha", fecha.ToString("yyyy-MM-dd HH:mm:ss"))
             cmdMov.Parameters.AddWithValue("@idArt", idArticulo)
@@ -1545,6 +1543,7 @@ Public Class FrmAlbaranes
             cmdMov.Parameters.AddWithValue("@cant", cantidadMov)
             cmdMov.Parameters.AddWithValue("@stockRes", nuevoStock)
             cmdMov.Parameters.AddWithValue("@doc", albaran)
+            cmdMov.Parameters.AddWithValue("@usr", idUsr)
             cmdMov.ExecuteNonQuery()
         End Using
     End Sub
